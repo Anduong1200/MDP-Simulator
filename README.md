@@ -1,4 +1,4 @@
-# GridWorld MDP Visualizer
+# GridWorld Visualizer
 
 Một phần mềm mô phỏng trực quan các thuật toán cốt lõi của **Reinforcement Learning** (dựa theo sách *Reinforcement Learning: An Introduction* - Sutton & Barto, Chapter 3 & 4), tập trung vào bài toán Markov Decision Process (MDP) hữu hạn.
 
