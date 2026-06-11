@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GridWorld MDP Visualizer</title>
+    <meta name="description" content="Interactive GridWorld MDP Visualizer with Value Iteration and Policy Iteration algorithms">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="index.css">
+</head>
+<body>
+    <div class="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <span class="logo-icon">◈</span>
+                    <h1>GridWorld <span class="accent">MDP</span></h1>
+                </div>
+                <p class="subtitle">Interactive Value Iteration & Policy Iteration Visualizer</p>
+            </div>
+        </header>
+
+        <main class="main-layout">
+            <!-- Left Panel: Controls -->
+            <aside class="panel panel-left" id="controlPanel">
+                <!-- Grid Setup -->
+                <section class="card" id="gridSetupCard">
+                    <h2 class="card-title">
+                        <span class="card-icon">⊞</span>
+                        Grid Setup
+                    </h2>
+                    <div class="input-row">
+                        <div class="input-group">
+                            <label for="rows">Rows (m)</label>
+                            <input type="number" id="rows" value="3" min="2" max="10">
+                        </div>
+                        <div class="input-group">
+                            <label for="cols">Cols (n)</label>
+                            <input type="number" id="cols" value="4" min="2" max="10">
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" id="btnCreateGrid" onclick="createGrid()">
+                        <span>Tạo Grid</span>
+                    </button>
+                </section>
+
+                <!-- Cell Editor -->
+                <section class="card" id="cellEditorCard" style="display:none;">
+                    <h2 class="card-title">
+                        <span class="card-icon">✎</span>
+                        Cell Editor
+                    </h2>
+                    <p class="card-desc">Click ô trên grid để chọn, sau đó chọn loại:</p>
+                    <div class="cell-type-buttons">
+                        <button class="btn btn-cell btn-empty" onclick="setCellType('empty')" title="Ô trống">
+                            <span class="cell-preview empty-preview"></span> Empty
+                        </button>
+                        <button class="btn btn-cell btn-blocked" onclick="setCellType('blocked')" title="Ô bị lấp">
+                            <span class="cell-preview blocked-preview"></span> Blocked
+                        </button>
+                        <button class="btn btn-cell btn-terminal" onclick="setCellType('terminal')" title="Terminal">
+                            <span class="cell-preview terminal-preview"></span> Terminal
+                        </button>
+                    </div>
+                    <div class="terminal-reward-group" id="terminalRewardGroup" style="display:none;">
+                        <label for="terminalReward">Terminal Reward:</label>
+                        <input type="number" id="terminalReward" value="1" step="0.1">
+                        <button class="btn btn-sm btn-accent" onclick="applyTerminalReward()">Set</button>
+                    </div>
+                    <div class="selected-cell-info" id="selectedCellInfo">
+                        <span class="info-label">Selected:</span>
+                        <span class="info-value" id="selectedCellText">None</span>
+                    </div>
+                </section>
+
+                <!-- Parameters -->
+                <section class="card" id="paramsCard" style="display:none;">
+                    <h2 class="card-title">
+                        <span class="card-icon">⚙</span>
+                        Parameters
+                    </h2>
+                    <div class="input-group">
+                        <label for="gamma">γ (Discount Factor)</label>
+                        <input type="number" id="gamma" value="0.9" min="0" max="0.999" step="0.01">
+                    </div>
+                    <div class="input-group">
+                        <label for="theta">θ (Threshold)</label>
+                        <input type="number" id="theta" value="0.0001" min="0.0000001" max="1" step="0.0001">
+                    </div>
+                    <div class="input-group">
+                        <label for="stepReward">Step Reward (cost mỗi bước)</label>
+                        <input type="number" id="stepReward" value="-0.04" step="0.01">
+                    </div>
+                </section>
+
+                <!-- Algorithm -->
+                <section class="card" id="algoCard" style="display:none;">
+                    <h2 class="card-title">
+                        <span class="card-icon">▶</span>
+                        Algorithm
+                    </h2>
+                    <div class="algo-selector">
+                        <button class="btn btn-algo active" id="btnVI" onclick="selectAlgo('vi')">Value Iteration</button>
+                        <button class="btn btn-algo" id="btnPI" onclick="selectAlgo('pi')">Policy Iteration</button>
+                    </div>
+
+                    <!-- PI Initial Policy -->
+                    <div class="pi-init-section" id="piInitSection" style="display:none;">
+                        <h3 class="subsection-title">Initial Policy Setup</h3>
+                        <div class="pi-init-options">
+                            <label class="radio-label">
+                                <input type="radio" name="piInit" value="uniform" checked onchange="onPiInitChange()">
+                                <span>Tất cả cùng 1 hướng</span>
+                            </label>
+                            <label class="radio-label">
+                                <input type="radio" name="piInit" value="random" onchange="onPiInitChange()">
+                                <span>Random mỗi ô</span>
+                            </label>
+                            <label class="radio-label">
+                                <input type="radio" name="piInit" value="manual" onchange="onPiInitChange()">
+                                <span>Setup tay từng ô</span>
+                            </label>
+                        </div>
+                        <div class="uniform-dir-group" id="uniformDirGroup">
+                            <label>Hướng mặc định:</label>
+                            <div class="direction-buttons">
+                                <button class="btn btn-dir active" data-dir="U" onclick="setUniformDir('U')">↑</button>
+                                <button class="btn btn-dir" data-dir="D" onclick="setUniformDir('D')">↓</button>
+                                <button class="btn btn-dir" data-dir="L" onclick="setUniformDir('L')">←</button>
+                                <button class="btn btn-dir" data-dir="R" onclick="setUniformDir('R')">→</button>
+                            </div>
+                        </div>
+                        <div class="manual-policy-hint" id="manualPolicyHint" style="display:none;">
+                            <p>Click ô trên grid → chọn hướng bên dưới:</p>
+                            <div class="direction-buttons manual-dir-btns">
+                                <button class="btn btn-dir" onclick="setManualDir('U')">↑</button>
+                                <button class="btn btn-dir" onclick="setManualDir('D')">↓</button>
+                                <button class="btn btn-dir" onclick="setManualDir('L')">←</button>
+                                <button class="btn btn-dir" onclick="setManualDir('R')">→</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="run-controls">
+                        <button class="btn btn-run" id="btnRun" onclick="runAlgorithm()">
+                            <span class="run-icon">▶</span> Chạy
+                        </button>
+                        <button class="btn btn-step" id="btnStep" onclick="stepAlgorithm()" style="display:none;">
+                            <span>⏭</span> Bước tiếp
+                        </button>
+                        <button class="btn btn-reset" id="btnReset" onclick="resetAlgorithm()" style="display:none;">
+                            <span>↺</span> Reset
+                        </button>
+                    </div>
+                </section>
+            </aside>
+
+            <!-- Center: Grid -->
+            <section class="grid-container" id="gridContainer">
+                <div class="grid-placeholder" id="gridPlaceholder">
+                    <div class="placeholder-icon">◈</div>
+                    <p>Nhập kích thước grid và nhấn <strong>Tạo Grid</strong></p>
+                </div>
+                <div class="grid-wrapper" id="gridWrapper" style="display:none;">
+                    <div class="grid-header">
+                        <span class="grid-label" id="gridLabel">3 × 4 Grid</span>
+                        <div class="display-toggle">
+                            <button class="btn btn-sm btn-toggle active" id="btnShowValues" onclick="toggleDisplay('values')">V(s)</button>
+                            <button class="btn btn-sm btn-toggle" id="btnShowPolicy" onclick="toggleDisplay('policy')">π(s)</button>
+                            <button class="btn btn-sm btn-toggle" id="btnShowBoth" onclick="toggleDisplay('both')">Both</button>
+                        </div>
+                    </div>
+                    <div class="grid" id="grid"></div>
+                    <div class="grid-legend">
+                        <span class="legend-item"><span class="legend-color empty-legend"></span>Empty</span>
+                        <span class="legend-item"><span class="legend-color blocked-legend"></span>Blocked</span>
+                        <span class="legend-item"><span class="legend-color terminal-pos-legend"></span>Terminal (+)</span>
+                        <span class="legend-item"><span class="legend-color terminal-neg-legend"></span>Terminal (−)</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Right Panel: Log -->
+            <aside class="panel panel-right" id="logPanel" style="display:none;">
+                <section class="card log-card">
+                    <h2 class="card-title">
+                        <span class="card-icon">📋</span>
+                        Execution Log
+                    </h2>
+                    <div class="log-controls">
+                        <button class="btn btn-sm" onclick="clearLog()">Clear</button>
+                    </div>
+                    <div class="log-content" id="logContent"></div>
+                </section>
+            </aside>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
