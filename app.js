@@ -258,7 +258,14 @@ function renderGrid() {
                     arrSpan.className = 'cell-arrow';
                     arrSpan.textContent = ARROWS[currentPolicy[r][c]] || currentPolicy[r][c];
                     el.appendChild(arrSpan);
+                } else if (!hasP && piInitMode === 'manual' && (displayMode === 'policy' || displayMode === 'both')) {
+                    const arrSpan = document.createElement('span');
+                    arrSpan.className = 'cell-arrow';
+                    arrSpan.textContent = ARROWS[initPolicy[r][c]] || initPolicy[r][c];
+                    arrSpan.style.color = '#eab308'; // distinguish manual init policy visually
+                    el.appendChild(arrSpan);
                 }
+                
                 if (hasV && displayMode === 'qsa') {
                     const qValues = qMatrix[r][c] || {U:0, D:0, L:0, R:0};
                     let bestA = 'U', bestVal = -Infinity;
@@ -433,35 +440,39 @@ function updateStochFormula() {
 // ── Algorithm Selection ──
 function selectAlgo(algo) {
     selectedAlgo = algo;
-    document.getElementById('btnVI').classList.toggle('active', algo === 'vi');
-    document.getElementById('btnPI').classList.toggle('active', algo === 'pi');
-    document.getElementById('btnPE').classList.toggle('active', algo === 'pe');
+    function toggleBtn(id, isActive) {
+        const el = document.getElementById(id);
+        if (el) el.classList.toggle('active', isActive);
+    }
     
-    document.getElementById('btnMCOn').classList.toggle('active', algo === 'mc_on');
-    document.getElementById('btnMCOff').classList.toggle('active', algo === 'mc_off');
+    toggleBtn('btnVI', algo === 'vi');
+    toggleBtn('btnPI', algo === 'pi');
+    toggleBtn('btnPE', algo === 'pe');
     
-    document.getElementById('btnQL').classList.toggle('active', algo === 'ql');
-    document.getElementById('btnSARSA').classList.toggle('active', algo === 'sarsa');
-    document.getElementById('btnESARSA').classList.toggle('active', algo === 'esarsa');
-    document.getElementById('btnDQL').classList.toggle('active', algo === 'dql');
+    toggleBtn('btnMCOn', algo === 'mc_on');
+    toggleBtn('btnMCOff', algo === 'mc_off');
     
-    document.getElementById('btnNStepSarsa').classList.toggle('active', algo === 'nstep_sarsa');
-    document.getElementById('btnNStepTree').classList.toggle('active', algo === 'nstep_tree');
-
-    document.getElementById('btnDynaQ').classList.toggle('active', algo === 'dynaq');
-    document.getElementById('btnPrioritizedSweeping').classList.toggle('active', algo === 'prioritized_sweeping');
-
-    document.getElementById('btnSemiGradSarsa').classList.toggle('active', algo === 'semi_grad_sarsa');
+    toggleBtn('btnQL', algo === 'ql');
+    toggleBtn('btnSARSA', algo === 'sarsa');
+    toggleBtn('btnESARSA', algo === 'esarsa');
+    toggleBtn('btnDQL', algo === 'dql');
     
-    document.getElementById('btnTDLambda').classList.toggle('active', algo === 'td_lambda');
-    document.getElementById('btnSarsaLambda').classList.toggle('active', algo === 'sarsa_lambda');
+    toggleBtn('btnNStepSarsa', algo === 'nstep_sarsa');
+    toggleBtn('btnNStepTree', algo === 'nstep_tree');
 
-    document.getElementById('btnREINFORCE').classList.toggle('active', algo === 'reinforce');
-    document.getElementById('btnREINFORCEBase').classList.toggle('active', algo === 'reinforce_base');
-    document.getElementById('btnActorCritic').classList.toggle('active', algo === 'actor_critic');
+    toggleBtn('btnDynaQ', algo === 'dynaq');
+    toggleBtn('btnPrioritizedSweeping', algo === 'prioritized_sweeping');
 
-    const btnOptions = document.getElementById('btnOptions');
-    if (btnOptions) btnOptions.classList.toggle('active', algo === 'options');
+    toggleBtn('btnSemiGradSarsa', algo === 'semi_grad_sarsa');
+    
+    toggleBtn('btnTDLambda', algo === 'td_lambda');
+    toggleBtn('btnSarsaLambda', algo === 'sarsa_lambda');
+
+    toggleBtn('btnREINFORCE', algo === 'reinforce');
+    toggleBtn('btnREINFORCEBase', algo === 'reinforce_base');
+    toggleBtn('btnActorCritic', algo === 'actor_critic');
+
+    toggleBtn('btnOptions', algo === 'options');
 
     const isTD = ['ql', 'sarsa', 'esarsa', 'dql'].includes(algo);
     const isMC = ['mc_on', 'mc_off'].includes(algo);
@@ -478,32 +489,59 @@ function selectAlgo(algo) {
     
     if (isPG) pg_policy = null; // Reset PG visuals when switching to/from PG
 
-    document.getElementById('piInitSection').style.display = isPIPE ? '' : 'none';
-    document.getElementById('mfParams').style.display = (isTD || isMC || isNStep || isDyna || isApprox || isLambda || isPG || isOptions) ? '' : 'none';
-    document.getElementById('alphaGroup').style.display = (isTD || isNStep || isDyna || isApprox || isLambda || isPG || isOptions) ? '' : 'none';
-    document.getElementById('alphaCriticGroup').style.display = hasCritic ? '' : 'none';
-    document.getElementById('lblAlpha').innerText = isPG ? 'α_θ (Actor)' : 'α (LR)';
-    document.getElementById('epsilon').parentElement.style.display = (isTD || isMC || isNStep || isDyna || isApproxCtrl || isLambdaCtrl || isOptions) ? '' : 'none';
-    document.getElementById('lambdaGroup').style.display = isLambda ? '' : 'none';
-    document.getElementById('traceTypeGroup').style.display = isLambda ? '' : 'none';
-    document.getElementById('nStepGroup').style.display = isNStep ? '' : 'none';
-    document.getElementById('dynaGroup').style.display = isDyna ? '' : 'none';
-    document.getElementById('featureGroup').style.display = isApprox ? '' : 'none';
+    function setDisplay(id, condition) {
+        const el = document.getElementById(id);
+        if (el) el.style.display = condition ? '' : 'none';
+    }
 
-    document.getElementById('asyncDPGroup').style.display = ['vi', 'pi', 'pe'].includes(algo) ? '' : 'none';
-    document.getElementById('thetaGroup').style.display = ['vi', 'pi', 'pe'].includes(algo) ? '' : 'none';
+    setDisplay('piInitSection', isPIPE);
+    setDisplay('mfParams', (isTD || isMC || isNStep || isDyna || isApprox || isLambda || isPG || isOptions));
+    setDisplay('alphaGroup', (isTD || isNStep || isDyna || isApprox || isLambda || isPG || isOptions));
+    setDisplay('alphaCriticGroup', hasCritic);
+    
+    const lblAlpha = document.getElementById('lblAlpha');
+    if (lblAlpha) lblAlpha.innerText = isPG ? 'α_θ (Actor)' : 'α (LR)';
+    
+    const epsilonEl = document.getElementById('epsilon');
+    if (epsilonEl && epsilonEl.parentElement) {
+        epsilonEl.parentElement.style.display = (isTD || isMC || isNStep || isDyna || isApproxCtrl || isLambdaCtrl || isOptions) ? '' : 'none';
+    }
+    
+    setDisplay('lambdaGroup', isLambda);
+    setDisplay('traceTypeGroup', isLambda);
+    setDisplay('nStepGroup', isNStep);
+    setDisplay('dynaGroup', isDyna);
+    setDisplay('featureGroup', isApprox);
+
+    setDisplay('asyncDPGroup', ['vi', 'pi', 'pe'].includes(algo));
+    setDisplay('thetaGroup', ['vi', 'pi', 'pe'].includes(algo));
 
     currentV = [];
     currentPolicy = [];
     renderGrid();
 }
 
-function onPiInitChange() {
-    const selected = document.querySelector('input[name="piInit"]:checked').value;
+function changeInitPolicy() {
+    const selected = document.getElementById('piInit').value;
     piInitMode = selected;
     document.getElementById('uniformDirGroup').style.display = selected === 'uniform' ? '' : 'none';
     document.getElementById('manualPolicyHint').style.display = selected === 'manual' ? '' : 'none';
     renderGrid();
+}
+
+function setManualDir(dir) {
+    if (!selectedCell) {
+        alert('Hãy click chọn 1 ô trên grid trước khi chọn hướng!');
+        return;
+    }
+    const {r, c} = selectedCell;
+    const cellType = cells[r][c].type;
+    if (cellType === 'empty' || cellType === 'start') {
+        initPolicy[r][c] = dir;
+        renderGrid();
+    } else {
+        alert('Chỉ có thể chọn hướng cho ô trống hoặc ô bắt đầu!');
+    }
 }
 
 function setUniformDir(dir) {

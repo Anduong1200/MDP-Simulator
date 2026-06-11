@@ -135,16 +135,16 @@ body {
    ============================ */
 .main-layout {
     display: grid;
-    grid-template-columns: 280px 1fr 320px;
+    grid-template-columns: 360px 1fr 320px;
     gap: 1rem;
     padding: 1rem;
-    max-width: 1600px;
+    max-width: 1700px;
     margin: 0 auto;
     min-height: calc(100vh - 70px);
 }
 
 .main-layout.no-log {
-    grid-template-columns: 280px 1fr;
+    grid-template-columns: 360px 1fr;
 }
 
 /* ============================
@@ -154,9 +154,16 @@ body {
     display: flex;
     flex-direction: column;
     gap: 0.8rem;
-    overflow-y: auto;
     max-height: calc(100vh - 90px);
     padding-right: 4px;
+}
+
+.panel-left {
+    overflow: hidden; /* Prevent full sidebar from scrolling */
+}
+
+.panel-right {
+    overflow-y: auto; /* Let right panel scroll normally */
 }
 
 .panel::-webkit-scrollbar {
@@ -943,9 +950,27 @@ input[type="text"]:focus {
     display: none;
     flex-direction: column;
     gap: 15px;
+    flex: 1;
+    min-height: 0;
 }
 .tab-content.active {
     display: flex;
+}
+
+#tabEnv {
+    overflow-y: auto;
+}
+
+#algoCard {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+}
+
+#paramsCard {
+    flex: none;
+    max-height: 45vh;
+    overflow-y: auto;
 }
 
 /* Toggleable Sections */
@@ -1121,3 +1146,12 @@ input[type="text"]:focus {
     background: rgba(99, 102, 241, 0.05);
 }
 
+.run-controls {
+    position: sticky;
+    bottom: -1px;
+    background: var(--surface-dark);
+    padding: 15px 0 20px 0;
+    z-index: 50;
+    margin-top: 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
