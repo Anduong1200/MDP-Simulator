@@ -352,12 +352,25 @@ function selectAlgo(algo) {
     document.getElementById('btnESARSA').classList.toggle('active', algo === 'esarsa');
     document.getElementById('btnDQL').classList.toggle('active', algo === 'dql');
     
+    document.getElementById('btnESARSA').classList.toggle('active', algo === 'esarsa');
+    document.getElementById('btnDQL').classList.toggle('active', algo === 'dql');
+    
+    document.getElementById('btnNStepSarsa').classList.toggle('active', algo === 'nstep_sarsa');
+    document.getElementById('btnNStepTree').classList.toggle('active', algo === 'nstep_tree');
+
+    document.getElementById('btnDynaQ').classList.toggle('active', algo === 'dynaq');
+    document.getElementById('btnPrioritizedSweeping').classList.toggle('active', algo === 'prioritized_sweeping');
+
     const isTD = ['ql', 'sarsa', 'esarsa', 'dql'].includes(algo);
     const isMC = ['mc_on', 'mc_off'].includes(algo);
+    const isNStep = ['nstep_sarsa', 'nstep_tree'].includes(algo);
+    const isDyna = ['dynaq', 'prioritized_sweeping'].includes(algo);
     
     document.getElementById('piInitSection').style.display = (algo === 'pi' || algo === 'pe') ? '' : 'none';
-    document.getElementById('mfParams').style.display = (isTD || isMC) ? '' : 'none';
-    document.getElementById('alphaGroup').style.display = isTD ? '' : 'none';
+    document.getElementById('mfParams').style.display = (isTD || isMC || isNStep || isDyna) ? '' : 'none';
+    document.getElementById('alphaGroup').style.display = (isTD || isNStep || isDyna) ? '' : 'none';
+    document.getElementById('nStepGroup').style.display = isNStep ? '' : 'none';
+    document.getElementById('dynaGroup').style.display = isDyna ? '' : 'none';
     
     currentV = [];
     currentPolicy = [];
@@ -1040,6 +1053,339 @@ async function runTDControl(algo, alpha, epsilon, episodes, gamma, stepReward) {
     return { V, policy };
 }
 
+// ── n-step Bootstrapping (Chapter 7) ──
+async function runNStepControl(algo, nStep, alpha, epsilon, episodes, gamma, stepReward) {
+    if (!startCell) {
+        alert('Cần đặt Start State để chạy n-step Bootstrapping!');
+        return { V: currentV, policy: currentPolicy };
+    }
+
+    const algoNames = { nstep_sarsa: `${nStep}-step SARSA`, nstep_tree: `${nStep}-step Tree Backup` };
+    logLines = [];
+    logLines.push({ type: 'header', text: `═══ ${algoNames[algo]} ═══` });
+    renderLog();
+
+    for (let r = 0; r < gridRows; r++) {
+        for (let c = 0; c < gridCols; c++) {
+            qMatrix[r][c] = { U: 0, D: 0, L: 0, R: 0 };
+        }
+    }
+
+    let V = Array.from({ length: gridRows }, () => Array(gridCols).fill(0));
+    let policy = Array.from({ length: gridRows }, () => Array(gridCols).fill('U'));
+
+    function getEpsilonGreedyAction(r, c, eps) {
+        if (Math.random() < eps) {
+            return ACTION_KEYS[Math.floor(Math.random() * 4)];
+        }
+        let bestA = 'U', bestQ = -Infinity;
+        for (const a of ACTION_KEYS) {
+            if (qMatrix[r][c][a] > bestQ) { bestQ = qMatrix[r][c][a]; bestA = a; }
+        }
+        return bestA;
+    }
+
+    function getPi(r, c, a, eps) {
+        let maxQ = -Infinity;
+        let greedyCount = 0;
+        for (const act of ACTION_KEYS) {
+            if (qMatrix[r][c][act] > maxQ) maxQ = qMatrix[r][c][act];
+        }
+        for (const act of ACTION_KEYS) {
+            if (qMatrix[r][c][act] === maxQ) greedyCount++;
+        }
+        let prob = eps / 4.0;
+        if (qMatrix[r][c][a] === maxQ) {
+            prob += (1.0 - eps) / greedyCount;
+        }
+        return prob;
+    }
+
+    for (let ep = 1; ep <= episodes; ep++) {
+        let currR = startCell.r;
+        let currC = startCell.c;
+        
+        let states = [{r: currR, c: currC}];
+        let actions = [];
+        let rewards = [0];
+
+        let action = getEpsilonGreedyAction(currR, currC, epsilon);
+        actions.push(action);
+        
+        let T = Infinity;
+        let t = 0;
+
+        agentPos = { r: currR, c: currC };
+        updateAgentPosition();
+
+        while (true) {
+            if (t < T) {
+                const probs = getNextStateProbabilities(states[t].r, states[t].c, actions[t]);
+                const rand = Math.random();
+                let cumulative = 0;
+                let nextR = states[t].r, nextC = states[t].c;
+                for (const p of probs) {
+                    cumulative += p.prob;
+                    if (rand <= cumulative) { nextR = p.nr; nextC = p.nc; break; }
+                }
+
+                const reward = getReward(states[t].r, states[t].c, actions[t], nextR, nextC, stepReward);
+                states.push({r: nextR, c: nextC});
+                rewards.push(reward);
+
+                if (isTerminal(nextR, nextC) || t >= 1000) {
+                    T = t + 1;
+                } else {
+                    let nextAction = getEpsilonGreedyAction(nextR, nextC, epsilon);
+                    actions.push(nextAction);
+                }
+                
+                agentPos = { r: nextR, c: nextC };
+                renderGrid();
+                await sleep(0);
+            }
+
+            let tau = t - nStep + 1;
+
+            if (tau >= 0) {
+                let G = 0;
+                
+                if (algo === 'nstep_sarsa') {
+                    for (let i = tau + 1; i <= Math.min(tau + nStep, T); i++) {
+                        G += Math.pow(gamma, i - tau - 1) * rewards[i];
+                    }
+                    if (tau + nStep < T) {
+                        const s_end = states[tau + nStep];
+                        const a_end = actions[tau + nStep];
+                        G += Math.pow(gamma, nStep) * qMatrix[s_end.r][s_end.c][a_end];
+                    }
+                } else if (algo === 'nstep_tree') {
+                    if (t + 1 >= T) {
+                        G = rewards[T];
+                    } else {
+                        const s_end = states[t + 1];
+                        let expectedQ = 0;
+                        for (const a of ACTION_KEYS) {
+                            expectedQ += getPi(s_end.r, s_end.c, a, epsilon) * qMatrix[s_end.r][s_end.c][a];
+                        }
+                        G = rewards[t + 1] + gamma * expectedQ;
+                    }
+
+                    for (let k = Math.min(t, T - 1); k >= tau + 1; k--) {
+                        const s_k = states[k];
+                        const a_k = actions[k];
+                        let expectedQ = 0;
+                        for (const a of ACTION_KEYS) {
+                            if (a !== a_k) {
+                                expectedQ += getPi(s_k.r, s_k.c, a, epsilon) * qMatrix[s_k.r][s_k.c][a];
+                            }
+                        }
+                        G = rewards[k] + gamma * expectedQ + gamma * getPi(s_k.r, s_k.c, a_k, epsilon) * G;
+                    }
+                }
+
+                const s_tau = states[tau];
+                const a_tau = actions[tau];
+                qMatrix[s_tau.r][s_tau.c][a_tau] += alpha * (G - qMatrix[s_tau.r][s_tau.c][a_tau]);
+
+                let bestA = 'U', bestQ = -Infinity;
+                for (const a of ACTION_KEYS) {
+                    if (qMatrix[s_tau.r][s_tau.c][a] > bestQ) { bestQ = qMatrix[s_tau.r][s_tau.c][a]; bestA = a; }
+                }
+                V[s_tau.r][s_tau.c] = bestQ;
+                policy[s_tau.r][s_tau.c] = bestA;
+                
+                currentV = V;
+                currentPolicy = policy;
+            }
+
+            if (tau === T - 1) break;
+            t++;
+        }
+        
+        if (ep % Math.ceil(episodes/10) === 0 || ep === episodes) {
+            logLines.push({ type: 'entry', text: `Episode ${ep}/${episodes} completed.` });
+            renderLog();
+        }
+        
+        if (document.getElementById('qTableModal').style.display === 'flex') {
+            renderQTable();
+        }
+    }
+    
+    agentPos = null;
+    updateAgentPosition();
+    return { V, policy };
+}
+
+// ── Planning and Learning (Chapter 8) ──
+async function runDynaControl(algo, planningSteps, alpha, epsilon, episodes, gamma, stepReward) {
+    if (!startCell) {
+        alert('Cần đặt Start State để chạy Dyna!');
+        return { V: currentV, policy: currentPolicy };
+    }
+
+    const algoNames = { dynaq: `Dyna-Q`, prioritized_sweeping: `Prioritized Sweeping` };
+    logLines = [];
+    logLines.push({ type: 'header', text: `═══ ${algoNames[algo]} ═══` });
+    renderLog();
+
+    for (let r = 0; r < gridRows; r++) {
+        for (let c = 0; c < gridCols; c++) {
+            qMatrix[r][c] = { U: 0, D: 0, L: 0, R: 0 };
+        }
+    }
+
+    let V = Array.from({ length: gridRows }, () => Array(gridCols).fill(0));
+    let policy = Array.from({ length: gridRows }, () => Array(gridCols).fill('U'));
+
+    // Model map: r_c_a -> { r, c, reward }
+    let model = {};
+    let PQueue = []; // For prioritized sweeping: array of {r, c, a, p}
+
+    function getEpsilonGreedyAction(r, c, eps) {
+        if (Math.random() < eps) {
+            return ACTION_KEYS[Math.floor(Math.random() * 4)];
+        }
+        let bestA = 'U', bestQ = -Infinity;
+        for (const a of ACTION_KEYS) {
+            if (qMatrix[r][c][a] > bestQ) { bestQ = qMatrix[r][c][a]; bestA = a; }
+        }
+        return bestA;
+    }
+
+    const thetaPS = 0.0001;
+
+    for (let ep = 1; ep <= episodes; ep++) {
+        let currR = startCell.r;
+        let currC = startCell.c;
+        let steps = 0;
+        
+        agentPos = { r: currR, c: currC };
+        updateAgentPosition();
+
+        while (!isTerminal(currR, currC) && steps < 1000) {
+            steps++;
+            let action = getEpsilonGreedyAction(currR, currC, epsilon);
+
+            // 1. Real Experience
+            const probs = getNextStateProbabilities(currR, currC, action);
+            const rand = Math.random();
+            let cumulative = 0;
+            let nextR = currR, nextC = currC;
+            for (const p of probs) {
+                cumulative += p.prob;
+                if (rand <= cumulative) { nextR = p.nr; nextC = p.nc; break; }
+            }
+            const reward = getReward(currR, currC, action, nextR, nextC, stepReward);
+
+            // 2. Direct RL Update
+            let maxNextQ = -Infinity;
+            for (const a of ACTION_KEYS) {
+                if (qMatrix[nextR][nextC][a] > maxNextQ) maxNextQ = qMatrix[nextR][nextC][a];
+            }
+            
+            if (algo === 'prioritized_sweeping') {
+                const P = Math.abs(reward + gamma * maxNextQ - qMatrix[currR][currC][action]);
+                if (P > thetaPS) {
+                    let found = PQueue.find(e => e.r === currR && e.c === currC && e.a === action);
+                    if (found) { found.p = Math.max(found.p, P); }
+                    else { PQueue.push({r: currR, c: currC, a: action, p: P}); }
+                    PQueue.sort((a, b) => b.p - a.p);
+                }
+            } else {
+                qMatrix[currR][currC][action] += alpha * (reward + gamma * maxNextQ - qMatrix[currR][currC][action]);
+            }
+
+            // 3. Model Learning
+            model[`${currR}_${currC}_${action}`] = { r: nextR, c: nextC, reward: reward };
+
+            // 4. Planning (Sweep)
+            if (algo === 'dynaq') {
+                const modelKeys = Object.keys(model);
+                if (modelKeys.length > 0) {
+                    for (let n = 0; n < planningSteps; n++) {
+                        const randomKey = modelKeys[Math.floor(Math.random() * modelKeys.length)];
+                        const [sr, sc, sa] = randomKey.split('_');
+                        const rStr = parseInt(sr), cStr = parseInt(sc);
+                        const data = model[randomKey];
+                        
+                        let mNextQ = -Infinity;
+                        for (const act of ACTION_KEYS) {
+                            if (qMatrix[data.r][data.c][act] > mNextQ) mNextQ = qMatrix[data.r][data.c][act];
+                        }
+                        qMatrix[rStr][cStr][sa] += alpha * (data.reward + gamma * mNextQ - qMatrix[rStr][cStr][sa]);
+                    }
+                }
+            } else if (algo === 'prioritized_sweeping') {
+                for (let n = 0; n < planningSteps; n++) {
+                    if (PQueue.length === 0) break;
+                    const top = PQueue.shift();
+                    
+                    const data = model[`${top.r}_${top.c}_${top.a}`];
+                    let mNextQ = -Infinity;
+                    for (const act of ACTION_KEYS) {
+                        if (qMatrix[data.r][data.c][act] > mNextQ) mNextQ = qMatrix[data.r][data.c][act];
+                    }
+                    qMatrix[top.r][top.c][top.a] += alpha * (data.reward + gamma * mNextQ - qMatrix[top.r][top.c][top.a]);
+
+                    for (const key in model) {
+                        const mData = model[key];
+                        if (mData.r === top.r && mData.c === top.c) {
+                            const [psR, psC, psA] = key.split('_');
+                            const prR = parseInt(psR), prC = parseInt(psC);
+                            let pNextQ = -Infinity;
+                            for (const act of ACTION_KEYS) {
+                                if (qMatrix[top.r][top.c][act] > pNextQ) pNextQ = qMatrix[top.r][top.c][act];
+                            }
+                            const P = Math.abs(mData.reward + gamma * pNextQ - qMatrix[prR][prC][psA]);
+                            if (P > thetaPS) {
+                                let found = PQueue.find(e => e.r === prR && e.c === prC && e.a === psA);
+                                if (found) { found.p = Math.max(found.p, P); }
+                                else { PQueue.push({r: prR, c: prC, a: psA, p: P}); }
+                            }
+                        }
+                    }
+                    PQueue.sort((a, b) => b.p - a.p);
+                }
+            }
+
+            for (let i = 0; i < gridRows; i++) {
+                for (let j = 0; j < gridCols; j++) {
+                    let bestA = 'U', bestQ = -Infinity;
+                    for (const act of ACTION_KEYS) {
+                        if (qMatrix[i][j][act] > bestQ) { bestQ = qMatrix[i][j][act]; bestA = act; }
+                    }
+                    V[i][j] = bestQ === -Infinity ? 0 : bestQ;
+                    policy[i][j] = bestA;
+                }
+            }
+
+            currR = nextR;
+            currC = nextC;
+            
+            currentV = V;
+            currentPolicy = policy;
+            agentPos = { r: currR, c: currC };
+            renderGrid();
+            await sleep(0);
+        }
+        
+        if (ep % Math.ceil(episodes/10) === 0 || ep === episodes) {
+            logLines.push({ type: 'entry', text: `Episode ${ep}/${episodes} completed.` });
+            renderLog();
+        }
+        
+        if (document.getElementById('qTableModal').style.display === 'flex') {
+            renderQTable();
+        }
+    }
+    
+    agentPos = null;
+    updateAgentPosition();
+    return { V, policy };
+}
+
 // ── Run Setup ──
 async function runAlgorithm() {
     if (isRunning) return;
@@ -1076,6 +1422,8 @@ async function runAlgorithm() {
 
     const isTD = ['ql', 'sarsa', 'esarsa', 'dql'].includes(selectedAlgo);
     const isMC = ['mc_on', 'mc_off'].includes(selectedAlgo);
+    const isNStep = ['nstep_sarsa', 'nstep_tree'].includes(selectedAlgo);
+    const isDyna = ['dynaq', 'prioritized_sweeping'].includes(selectedAlgo);
     let result;
     if (selectedAlgo === 'vi') {
         result = await runValueIteration(gamma, theta, isNaN(stepReward) ? -0.04 : stepReward);
@@ -1092,6 +1440,18 @@ async function runAlgorithm() {
         const epsilon = parseFloat(document.getElementById('epsilon').value) || 0.2;
         const episodes = parseInt(document.getElementById('episodes').value) || 1000;
         result = await runMonteCarloControl(selectedAlgo, epsilon, episodes, gamma, isNaN(stepReward) ? -0.04 : stepReward);
+    } else if (isNStep) {
+        const alpha = parseFloat(document.getElementById('alpha').value) || 0.1;
+        const epsilon = parseFloat(document.getElementById('epsilon').value) || 0.2;
+        const episodes = parseInt(document.getElementById('episodes').value) || 1000;
+        const nSteps = parseInt(document.getElementById('nSteps').value) || 3;
+        result = await runNStepControl(selectedAlgo, nSteps, alpha, epsilon, episodes, gamma, isNaN(stepReward) ? -0.04 : stepReward);
+    } else if (isDyna) {
+        const alpha = parseFloat(document.getElementById('alpha').value) || 0.1;
+        const epsilon = parseFloat(document.getElementById('epsilon').value) || 0.2;
+        const episodes = parseInt(document.getElementById('episodes').value) || 1000;
+        const planningSteps = parseInt(document.getElementById('planningSteps').value) || 10;
+        result = await runDynaControl(selectedAlgo, planningSteps, alpha, epsilon, episodes, gamma, isNaN(stepReward) ? -0.04 : stepReward);
     }
 
     currentV = result.V;

@@ -12,7 +12,13 @@ Một phần mềm mô phỏng trực quan các thuật toán cốt lõi của *
 - **Monte Carlo Methods (Episodic Model-Free)**: Mô phỏng phương pháp học thông qua kinh nghiệm từ từng Episode hoàn chỉnh.
   - **On-policy MC Control**: Học giá trị và tối ưu Policy dựa trên chính sách đang sử dụng (First-visit MC).
   - **Off-policy MC Control**: Học Policy tối ưu từ các tập kinh nghiệm sinh ra bởi Behavior Policy ngẫu nhiên thông qua Weighted Importance Sampling.
-- **Temporal-Difference Learning (Model-Free)**: Mô phỏng quá trình Agent tự học thông qua tương tác trực tiếp với môi trường (Trial and Error). Hỗ trợ đầy đủ các thuật toán cốt lõi của Chapter 6:
+- **n-step Bootstrapping**: Cầu nối giữa Monte Carlo và TD Learning.
+  - **n-step SARSA**: Mở rộng của SARSA với phần thưởng kéo dài n-bước.
+  - **Tree Backup Algorithm**: Thuật toán Off-policy an toàn, loại bỏ phương sai cao mà không cần dùng đến Importance Sampling.
+- **Planning & Learning (Dyna Architecture)**: Kết hợp hoàn hảo giữa Model-Free (Học thực tế) và Model-Based (Tưởng tượng).
+  - **Dyna-Q**: Tại mỗi bước đi thực tế, thực hiện nội suy thêm $n$ bước "tưởng tượng" (Planning Steps) từ các trải nghiệm trong quá khứ để tăng tốc độ hội tụ.
+  - **Prioritized Sweeping**: Phiên bản tối ưu của Dyna-Q. Duy trì một Hàng đợi ưu tiên (Priority Queue) để chỉ quét (sweep) những trạng thái có độ chênh lệch Q-Value cao nhất, giúp lan truyền phần thưởng về đích cực kì nhanh.
+- **Temporal-Difference Learning (Step-by-step Model-Free)**: Mô phỏng quá trình Agent tự học thông qua tương tác trực tiếp với môi trường (Trial and Error). Hỗ trợ đầy đủ các thuật toán cốt lõi của Chapter 6:
   - **Q-Learning** (Off-policy TD Control)
   - **SARSA** (On-policy TD Control)
   - **Expected SARSA**
