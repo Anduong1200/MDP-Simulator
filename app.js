@@ -154,6 +154,37 @@ function renderGrid() {
                     arrSpan.textContent = ARROWS[currentPolicy[r][c]] || currentPolicy[r][c];
                     el.appendChild(arrSpan);
                 }
+                if (hasV && displayMode === 'qsa') {
+                    const stepReward = parseFloat(document.getElementById('stepReward').value) || -0.04;
+                    const gamma = parseFloat(document.getElementById('gamma').value) || 0.9;
+                    const qValues = {};
+                    let bestA = null, bestVal = -Infinity;
+                    for (const a of ACTION_KEYS) {
+                        let q = 0;
+                        const probs = getNextStateProbabilities(r, c, a);
+                        for (const p of probs) {
+                            const reward = getReward(r, c, a, p.nr, p.nc, stepReward);
+                            q += p.prob * (reward + gamma * currentV[p.nr][p.nc]);
+                        }
+                        qValues[a] = q;
+                        if (q > bestVal) { bestVal = q; bestA = a; }
+                    }
+                    
+                    const qContainer = document.createElement('div');
+                    qContainer.className = 'cell-q-container';
+                    
+                    const elU = document.createElement('div'); elU.className = `cell-q-val cell-q-u ${bestA === 'U' ? 'cell-q-best' : ''}`; elU.textContent = qValues['U'].toFixed(2);
+                    const elD = document.createElement('div'); elD.className = `cell-q-val cell-q-d ${bestA === 'D' ? 'cell-q-best' : ''}`; elD.textContent = qValues['D'].toFixed(2);
+                    const elL = document.createElement('div'); elL.className = `cell-q-val cell-q-l ${bestA === 'L' ? 'cell-q-best' : ''}`; elL.textContent = qValues['L'].toFixed(2);
+                    const elR = document.createElement('div'); elR.className = `cell-q-val cell-q-r ${bestA === 'R' ? 'cell-q-best' : ''}`; elR.textContent = qValues['R'].toFixed(2);
+                    
+                    qContainer.appendChild(elU);
+                    qContainer.appendChild(elD);
+                    qContainer.appendChild(elL);
+                    qContainer.appendChild(elR);
+                    
+                    el.appendChild(qContainer);
+                }
 
                 // Show init policy arrow if PI/PE manual mode and no result yet
                 if (!hasV && !hasP && (selectedAlgo === 'pi' || selectedAlgo === 'pe') && piInitMode === 'manual') {
@@ -244,7 +275,7 @@ function applyTerminalReward() {
 
 // ── Tooltip Q-Value ──
 function onCellHover(r, c, event) {
-    if (currentV.length === 0 || cells[r][c].type === 'blocked' || cells[r][c].type === 'terminal') {
+    if (currentV.length === 0 || cells[r][c].type === 'blocked' || cells[r][c].type === 'terminal' || displayMode === 'qsa') {
         hideTooltip();
         return;
     }
@@ -377,6 +408,7 @@ function toggleDisplay(mode) {
     document.getElementById('btnShowValues').classList.toggle('active', mode === 'values');
     document.getElementById('btnShowPolicy').classList.toggle('active', mode === 'policy');
     document.getElementById('btnShowBoth').classList.toggle('active', mode === 'both');
+    document.getElementById('btnShowQ').classList.toggle('active', mode === 'qsa');
     renderGrid();
 }
 
