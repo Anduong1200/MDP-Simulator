@@ -233,6 +233,9 @@ function renderGrid() {
 
             // Content
             if (cell.type === 'blocked') {
+            } else if (cell.type === 'option_target') {
+                el.style.border = '2px dashed var(--accent)';
+                el.style.backgroundColor = 'rgba(168, 85, 247, 0.1)';
             } else if (cell.type === 'terminal') {
                 const rewardSpan = document.createElement('span');
                 rewardSpan.className = 'cell-reward ' + (cell.reward >= 0 ? 'positive-reward' : 'negative-reward');
@@ -457,6 +460,9 @@ function selectAlgo(algo) {
     document.getElementById('btnREINFORCEBase').classList.toggle('active', algo === 'reinforce_base');
     document.getElementById('btnActorCritic').classList.toggle('active', algo === 'actor_critic');
 
+    const btnOptions = document.getElementById('btnOptions');
+    if (btnOptions) btnOptions.classList.toggle('active', algo === 'options');
+
     const isTD = ['ql', 'sarsa', 'esarsa', 'dql'].includes(algo);
     const isMC = ['mc_on', 'mc_off'].includes(algo);
     const isNStep = ['nstep_sarsa', 'nstep_tree'].includes(algo);
@@ -467,16 +473,17 @@ function selectAlgo(algo) {
     const isLambdaCtrl = algo === 'sarsa_lambda';
     const isPIPE = ['pi', 'pe'].includes(algo);
     const isPG = ['reinforce', 'reinforce_base', 'actor_critic'].includes(algo);
+    const isOptions = algo === 'options';
     const hasCritic = ['reinforce_base', 'actor_critic'].includes(algo);
     
     if (isPG) pg_policy = null; // Reset PG visuals when switching to/from PG
 
     document.getElementById('piInitSection').style.display = isPIPE ? '' : 'none';
-    document.getElementById('mfParams').style.display = (isTD || isMC || isNStep || isDyna || isApprox || isLambda || isPG) ? '' : 'none';
-    document.getElementById('alphaGroup').style.display = (isTD || isNStep || isDyna || isApprox || isLambda || isPG) ? '' : 'none';
+    document.getElementById('mfParams').style.display = (isTD || isMC || isNStep || isDyna || isApprox || isLambda || isPG || isOptions) ? '' : 'none';
+    document.getElementById('alphaGroup').style.display = (isTD || isNStep || isDyna || isApprox || isLambda || isPG || isOptions) ? '' : 'none';
     document.getElementById('alphaCriticGroup').style.display = hasCritic ? '' : 'none';
     document.getElementById('lblAlpha').innerText = isPG ? 'α_θ (Actor)' : 'α (LR)';
-    document.getElementById('epsilon').parentElement.style.display = (isTD || isMC || isNStep || isDyna || isApproxCtrl || isLambdaCtrl) ? '' : 'none';
+    document.getElementById('epsilon').parentElement.style.display = (isTD || isMC || isNStep || isDyna || isApproxCtrl || isLambdaCtrl || isOptions) ? '' : 'none';
     document.getElementById('lambdaGroup').style.display = isLambda ? '' : 'none';
     document.getElementById('traceTypeGroup').style.display = isLambda ? '' : 'none';
     document.getElementById('nStepGroup').style.display = isNStep ? '' : 'none';
@@ -1478,6 +1485,17 @@ async function runAlgorithm() {
         const epsilon = parseFloat(document.getElementById('epsilon').value) || 0.2;
         const episodes = parseInt(document.getElementById('episodes').value) || 1000;
         result = await runTDControl(selectedAlgo, alpha, epsilon, episodes, gamma, isNaN(stepReward) ? -0.04 : stepReward);
+    } else if (isDyna) {
+        const alpha = parseFloat(document.getElementById('alpha').value) || 0.1;
+        const epsilon = parseFloat(document.getElementById('epsilon').value) || 0.2;
+        const episodes = parseInt(document.getElementById('episodes').value) || 1000;
+        const planningSteps = parseInt(document.getElementById('planningSteps').value) || 10;
+        result = await runDynaControl(selectedAlgo, planningSteps, alpha, epsilon, episodes, gamma, isNaN(stepReward) ? -0.04 : stepReward);
+    } else if (selectedAlgo === 'options') {
+        const alpha = parseFloat(document.getElementById('alpha').value) || 0.1;
+        const epsilon = parseFloat(document.getElementById('epsilon').value) || 0.2;
+        const episodes = parseInt(document.getElementById('episodes').value) || 1000;
+        result = await runOptionsFramework(alpha, epsilon, episodes, gamma, isNaN(stepReward) ? -0.04 : stepReward);
     } else if (isLambda) {
         const alpha = parseFloat(document.getElementById('alpha').value) || 0.1;
         const epsilon = parseFloat(document.getElementById('epsilon').value) || 0.2;
@@ -1676,4 +1694,132 @@ function renderQTable() {
         }
     }
     tbody.innerHTML = html;
+}
+
+// ── Hierarchical RL: Options Framework (Chapter 17) ──
+async function runOptionsFramework(alpha, epsilon, episodes, gamma, stepReward) {
+    if (!startCell) return { V: currentV, policy: currentPolicy };
+    logLines = []; logLines.push({ type: 'header', text: '═══ SMDP Q-Learning (Options) ═══' }); renderLog();
+    initChart();
+    
+    // Check if there are any option_targets
+    let optionTargets = [];
+    for (let r = 0; r < gridRows; r++) {
+        for (let c = 0; c < gridCols; c++) {
+            if (cells[r][c].type === 'option_target') optionTargets.push({r, c});
+        }
+    }
+    
+    // We add an extra "action" for each option target. Let's say action is O_0, O_1, etc.
+    let Q = Array.from({ length: gridRows }, () => Array.from({ length: gridCols }, () => {
+        let qs = {U:0, D:0, L:0, R:0};
+        optionTargets.forEach((t, i) => qs['O_'+i] = 0);
+        return qs;
+    }));
+    
+    let V = Array.from({ length: gridRows }, () => Array(gridCols).fill(0));
+    let policy = Array.from({ length: gridRows }, () => Array(gridCols).fill('U'));
+
+    for (let ep = 1; ep <= episodes && !isStopped; ep++) {
+        if (ep % 50 === 0) await sleep(0);
+        let currR = startCell.r, currC = startCell.c, steps = 0, epReward = 0;
+        const isAnimatingThisEp = document.getElementById('animateAgent') && document.getElementById('animateAgent').checked && (episodes - ep < 5);
+        
+        while (!isTerminal(currR, currC) && steps < 1000) {
+            if (isAnimatingThisEp) { agentPos = { r: currR, c: currC }; renderGrid(); await sleep(50); }
+            steps++;
+            
+            // Epsilon-greedy over primitive actions AND options
+            let qs = Q[currR][currC];
+            let availableActions = Object.keys(qs);
+            let action;
+            if (Math.random() < epsilon) {
+                action = availableActions[Math.floor(Math.random() * availableActions.length)];
+            } else {
+                let bestA = availableActions[0], bestQ = -Infinity;
+                for (const a of availableActions) {
+                    if (qs[a] > bestQ) { bestQ = qs[a]; bestA = a; }
+                    else if (qs[a] === bestQ && Math.random() < 0.5) bestA = a;
+                }
+                action = bestA;
+            }
+            
+            let nextR = currR, nextC = currC;
+            let totalReward = 0;
+            let k = 0; // Number of primitive steps taken
+            
+            if (action.startsWith('O_')) {
+                // Execute Option (Macro-action)
+                let targetIdx = parseInt(action.split('_')[1]);
+                let target = optionTargets[targetIdx];
+                
+                // For simplicity, the option policy is just greedy Manhattan distance towards target
+                // It terminates when it reaches the target or hits an obstacle/terminal
+                while (!isTerminal(nextR, nextC) && (nextR !== target.r || nextC !== target.c) && k < 50) {
+                    k++;
+                    let dr = target.r - nextR;
+                    let dc = target.c - nextC;
+                    let primAction = 'U';
+                    if (Math.abs(dr) > Math.abs(dc)) primAction = dr > 0 ? 'D' : 'U';
+                    else primAction = dc > 0 ? 'R' : 'L';
+                    
+                    const next = getNextStateProbabilities(nextR, nextC, primAction)[0];
+                    totalReward += Math.pow(gamma, k-1) * getReward(nextR, nextC, primAction, next.nr, next.nc, stepReward);
+                    nextR = next.nr; nextC = next.nc;
+                    
+                    if (isAnimatingThisEp) { agentPos = { r: nextR, c: nextC }; renderGrid(); await sleep(20); }
+                    if (cells[nextR][nextC].type === 'blocked' || isTerminal(nextR, nextC)) break;
+                }
+            } else {
+                // Primitive action
+                k = 1;
+                const next = getNextStateProbabilities(currR, currC, action)[0];
+                totalReward = getReward(currR, currC, action, next.nr, next.nc, stepReward);
+                nextR = next.nr; nextC = next.nc;
+            }
+            
+            epReward += totalReward;
+            
+            // SMDP Q-Learning Update
+            let maxNextQ = 0;
+            if (!isTerminal(nextR, nextC)) {
+                maxNextQ = Math.max(...Object.values(Q[nextR][nextC]));
+            }
+            
+            Q[currR][currC][action] += alpha * (totalReward + Math.pow(gamma, k) * maxNextQ - Q[currR][currC][action]);
+            
+            currR = nextR; currC = nextC;
+        }
+        
+        updateChart(ep, epReward);
+    }
+    
+    finalizeChart();
+    // Extract V and policy (preferring primitive actions for visualization)
+    for (let r = 0; r < gridRows; r++) {
+        for (let c = 0; c < gridCols; c++) {
+            if (!isBlocked(r, c) && !isTerminal(r, c)) {
+                let qs = Q[r][c];
+                let bestA = 'U', bestQ = -Infinity;
+                for (const a of Object.keys(qs)) {
+                    if (qs[a] > bestQ) { bestQ = qs[a]; bestA = a; }
+                }
+                V[r][c] = bestQ; 
+                // For visualization, if best action is an Option, we show a special character or just map to direction
+                if (bestA.startsWith('O_')) {
+                    let targetIdx = parseInt(bestA.split('_')[1]);
+                    let target = optionTargets[targetIdx];
+                    let dr = target.r - r;
+                    let dc = target.c - c;
+                    if (Math.abs(dr) > Math.abs(dc)) policy[r][c] = dr > 0 ? 'D' : 'U';
+                    else policy[r][c] = dc > 0 ? 'R' : 'L';
+                } else {
+                    policy[r][c] = bestA;
+                }
+            }
+        }
+    }
+    
+    agentPos = null; updateAgentPosition();
+    return { V, policy };
 }

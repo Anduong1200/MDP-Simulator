@@ -21,7 +21,7 @@
                     <span class="logo-icon">◈</span>
                     <h1>GridWorld <span class="accent">MDP</span></h1>
                 </div>
-                <p class="subtitle">Interactive GridWorld RL Visualizer | <a href="pavlov.html" style="color:var(--accent); font-weight:bold; text-decoration:none;">🐶 Bật chế độ: Pavlov's Dog (TD Model)</a></p>
+                <p class="subtitle">Interactive GridWorld RL Visualizer | <a href="pavlov.html" style="color:var(--accent); font-weight:bold; text-decoration:none; margin-right:15px;">🐶 Pavlov's Dog</a> | <a href="tictactoe.html" style="color:#ef4444; font-weight:bold; text-decoration:none; margin-left:15px;">❌ Tic-Tac-Toe (Self-Play)</a></p>
             </div>
         </header>
 
@@ -76,6 +76,9 @@
                             </button>
                             <button class="btn btn-cell btn-start" onclick="setCellType('start')" title="Start State">
                                 <span class="cell-preview start-preview"></span> Start
+                            </button>
+                            <button class="btn btn-cell btn-option" onclick="setCellType('option_target')" title="Option Target (Ch 17)">
+                                <span class="cell-preview" style="background:var(--accent); border-radius:50%;"></span> Option Target
                             </button>
                         </div>
                         <div class="terminal-reward-group" id="terminalRewardGroup" style="display:none;">
@@ -196,6 +199,18 @@
                                 <button class="btn btn-algo" id="btnREINFORCE" onclick="selectAlgo('reinforce')" style="flex-basis: 100%; background: rgba(236, 72, 153, 0.1); border-color: #ec4899;">REINFORCE</button>
                                 <button class="btn btn-algo" id="btnREINFORCEBase" onclick="selectAlgo('reinforce_base')" style="flex-basis: 100%; background: rgba(236, 72, 153, 0.1); border-color: #ec4899; margin-top: 4px;">REINFORCE w/ Baseline</button>
                                 <button class="btn btn-algo" id="btnActorCritic" onclick="selectAlgo('actor_critic')" style="flex-basis: 100%; background: rgba(236, 72, 153, 0.1); border-color: #ec4899; margin-top: 4px;">One-step Actor-Critic</button>
+                            </div>
+                        </div>
+
+                        <!-- Part 5 -->
+                        <div class="toggle-header" onclick="toggleSection('part5')">
+                            <span>🚀 Part V: Frontiers</span>
+                            <span class="toggle-icon">▶</span>
+                        </div>
+                        <div class="toggle-content" id="part5" style="display: none;">
+                            <div class="algo-selector" style="flex-wrap:wrap; display: flex; gap: 4px;">
+                                <div class="subsection-title" style="flex-basis: 100%; font-size: 0.75rem; text-align: center; color: #a855f7; margin-bottom: 2px;">Chapter 17 (Hierarchical RL)</div>
+                                <button class="btn btn-algo" id="btnOptions" onclick="selectAlgo('options')" style="flex-basis: 100%; background: rgba(168, 85, 247, 0.1); border-color: #a855f7;">SMDP Q-Learning (Options)</button>
                             </div>
                         </div>
 
