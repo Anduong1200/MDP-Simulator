@@ -34,7 +34,23 @@ let simG = 0;
 let simGammaPower = 1;
 let simStepCount = 0;
 
-// ── Grid Creation ──
+// ── UI UI Navigation & Toggle ──
+function switchSidebarTab(tabName) {
+    document.getElementById('tabBtnEnv').classList.toggle('active', tabName === 'env');
+    document.getElementById('tabBtnAlgo').classList.toggle('active', tabName === 'algo');
+    
+    document.getElementById('tabEnv').classList.toggle('active', tabName === 'env');
+    document.getElementById('tabAlgo').classList.toggle('active', tabName === 'algo');
+}
+
+function toggleSection(sectionId) {
+    const content = document.getElementById(sectionId);
+    const header = content.previousElementSibling;
+    content.classList.toggle('active');
+    header.classList.toggle('open');
+}
+
+// ── Initialization ──
 function createGrid() {
     const m = parseInt(document.getElementById('rows').value);
     const n = parseInt(document.getElementById('cols').value);
@@ -361,16 +377,26 @@ function selectAlgo(algo) {
     document.getElementById('btnDynaQ').classList.toggle('active', algo === 'dynaq');
     document.getElementById('btnPrioritizedSweeping').classList.toggle('active', algo === 'prioritized_sweeping');
 
+    document.getElementById('btnSemiGradTD').classList.toggle('active', algo === 'semi_grad_td');
+
     const isTD = ['ql', 'sarsa', 'esarsa', 'dql'].includes(algo);
     const isMC = ['mc_on', 'mc_off'].includes(algo);
     const isNStep = ['nstep_sarsa', 'nstep_tree'].includes(algo);
     const isDyna = ['dynaq', 'prioritized_sweeping'].includes(algo);
+    const isApprox = ['semi_grad_td'].includes(algo);
+    const isPIPE = ['pi', 'pe'].includes(algo);
     
-    document.getElementById('piInitSection').style.display = (algo === 'pi' || algo === 'pe') ? '' : 'none';
-    document.getElementById('mfParams').style.display = (isTD || isMC || isNStep || isDyna) ? '' : 'none';
-    document.getElementById('alphaGroup').style.display = (isTD || isNStep || isDyna) ? '' : 'none';
+    document.getElementById('piInitSection').style.display = isPIPE ? '' : 'none';
+    document.getElementById('mfParams').style.display = (isTD || isMC || isNStep || isDyna || isApprox) ? '' : 'none';
+    document.getElementById('alphaGroup').style.display = (isTD || isNStep || isDyna || isApprox) ? '' : 'none';
     document.getElementById('nStepGroup').style.display = isNStep ? '' : 'none';
     document.getElementById('dynaGroup').style.display = isDyna ? '' : 'none';
+    document.getElementById('featureGroup').style.display = isApprox ? '' : 'none';
+
+    // Show/hide asyncDP depending on algo (Only VI, PI, PE can use it properly)
+    document.getElementById('asyncDPGroup').style.display = ['vi', 'pi', 'pe'].includes(algo) ? '' : 'none';
+    document.getElementById('thetaGroup').style.display = ['vi', 'pi', 'pe'].includes(algo) ? '' : 'none';
+
     
     currentV = [];
     currentPolicy = [];
@@ -1386,6 +1412,136 @@ async function runDynaControl(algo, planningSteps, alpha, epsilon, episodes, gam
     return { V, policy };
 }
 
+// ── Part II: Approximate Methods (Chapter 9) ──
+async function runApproximatePrediction(algo, alpha, episodes, gamma, stepReward, featureType) {
+    if (!startCell) {
+        alert('Cần đặt Start State để chạy Prediction!');
+        return { V: currentV, policy: currentPolicy };
+    }
+
+    logLines = [];
+    logLines.push({ type: 'header', text: `═══ Semi-gradient TD(0) ═══` });
+    renderLog();
+
+    let numFeatures = 0;
+    let getFeatures = null;
+
+    if (featureType === 'coord') {
+        numFeatures = 3;
+        getFeatures = (r, c) => {
+            let x = Array(numFeatures).fill(0);
+            x[0] = 1; 
+            x[1] = r / gridRows; 
+            x[2] = c / gridCols; 
+            return x;
+        };
+    } else if (featureType === 'tile') {
+        const numTilings = 3;
+        const tileSize = 3;
+        const width = Math.ceil(gridCols / tileSize) + 1;
+        const height = Math.ceil(gridRows / tileSize) + 1;
+        const tilesPerTiling = width * height;
+        numFeatures = numTilings * tilesPerTiling;
+
+        getFeatures = (r, c) => {
+            let x = Array(numFeatures).fill(0);
+            for (let t = 0; t < numTilings; t++) {
+                let tr = Math.floor((r + t) / tileSize);
+                let tc = Math.floor((c + t) / tileSize);
+                let index = t * tilesPerTiling + (tr * width + tc);
+                if (index < numFeatures) {
+                    x[index] = 1;
+                }
+            }
+            return x;
+        };
+    }
+
+    let w = Array(numFeatures).fill(0);
+    
+    function getV(r, c) {
+        if (isBlocked(r, c)) return 0;
+        const x = getFeatures(r, c);
+        let val = 0;
+        for (let i = 0; i < numFeatures; i++) {
+            val += w[i] * x[i];
+        }
+        return val;
+    }
+
+    let V = Array.from({ length: gridRows }, () => Array(gridCols).fill(0));
+    let policy = Array.from({ length: gridRows }, () => Array(gridCols).fill('?'));
+    for (let r = 0; r < gridRows; r++) {
+        for (let c = 0; c < gridCols; c++) {
+            policy[r][c] = ACTION_KEYS[Math.floor(Math.random() * 4)];
+        }
+    }
+
+    for (let ep = 1; ep <= episodes; ep++) {
+        let currR = startCell.r;
+        let currC = startCell.c;
+        let steps = 0;
+        
+        agentPos = { r: currR, c: currC };
+        updateAgentPosition();
+
+        while (!isTerminal(currR, currC) && steps < 1000) {
+            steps++;
+            let action = ACTION_KEYS[Math.floor(Math.random() * 4)];
+
+            const probs = getNextStateProbabilities(currR, currC, action);
+            const rand = Math.random();
+            let cumulative = 0;
+            let nextR = currR, nextC = currC;
+            for (const p of probs) {
+                cumulative += p.prob;
+                if (rand <= cumulative) { nextR = p.nr; nextC = p.nc; break; }
+            }
+            const reward = getReward(currR, currC, action, nextR, nextC, stepReward);
+
+            const v_curr = getV(currR, currC);
+            const v_next = isTerminal(nextR, nextC) ? 0 : getV(nextR, nextC);
+            
+            const x_curr = getFeatures(currR, currC);
+            const error = reward + gamma * v_next - v_curr;
+
+            for (let i = 0; i < numFeatures; i++) {
+                w[i] += alpha * error * x_curr[i];
+            }
+
+            for (let i = 0; i < gridRows; i++) {
+                for (let j = 0; j < gridCols; j++) {
+                    if (!isBlocked(i, j) && !isTerminal(i, j)) {
+                        V[i][j] = getV(i, j);
+                    }
+                }
+            }
+
+            currR = nextR;
+            currC = nextC;
+            
+            currentV = V;
+            currentPolicy = policy; 
+            agentPos = { r: currR, c: currC };
+            renderGrid();
+            await sleep(0);
+        }
+        
+        if (ep % Math.ceil(episodes/10) === 0 || ep === episodes) {
+            logLines.push({ type: 'entry', text: `Episode ${ep}/${episodes} completed.` });
+            renderLog();
+        }
+    }
+    
+    logLines.push({ type: 'entry', text: `Final Weights (w):` });
+    logLines.push({ type: 'entry', text: `[${w.map(n => n.toFixed(2)).join(', ')}]` });
+    renderLog();
+    
+    agentPos = null;
+    updateAgentPosition();
+    return { V, policy };
+}
+
 // ── Run Setup ──
 async function runAlgorithm() {
     if (isRunning) return;
@@ -1424,6 +1580,8 @@ async function runAlgorithm() {
     const isMC = ['mc_on', 'mc_off'].includes(selectedAlgo);
     const isNStep = ['nstep_sarsa', 'nstep_tree'].includes(selectedAlgo);
     const isDyna = ['dynaq', 'prioritized_sweeping'].includes(selectedAlgo);
+    const isApprox = ['semi_grad_td'].includes(selectedAlgo);
+
     let result;
     if (selectedAlgo === 'vi') {
         result = await runValueIteration(gamma, theta, isNaN(stepReward) ? -0.04 : stepReward);
@@ -1452,6 +1610,11 @@ async function runAlgorithm() {
         const episodes = parseInt(document.getElementById('episodes').value) || 1000;
         const planningSteps = parseInt(document.getElementById('planningSteps').value) || 10;
         result = await runDynaControl(selectedAlgo, planningSteps, alpha, epsilon, episodes, gamma, isNaN(stepReward) ? -0.04 : stepReward);
+    } else if (isApprox) {
+        const alpha = parseFloat(document.getElementById('alpha').value) || 0.1;
+        const episodes = parseInt(document.getElementById('episodes').value) || 1000;
+        const featureType = document.getElementById('featureType').value || 'tile';
+        result = await runApproximatePrediction(selectedAlgo, alpha, episodes, gamma, isNaN(stepReward) ? -0.04 : stepReward, featureType);
     }
 
     currentV = result.V;

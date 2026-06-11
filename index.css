@@ -910,6 +910,79 @@ input[type="text"]:focus {
     text-align: center;
 }
 
+/* ── Sidebar Redesign ── */
+.sidebar-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 12px;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 4px;
+    border-radius: 8px;
+}
+.sidebar-tab {
+    flex: 1;
+    padding: 8px;
+    text-align: center;
+    cursor: pointer;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    transition: all 0.2s;
+    color: rgba(255,255,255,0.5);
+}
+.sidebar-tab.active {
+    background: rgba(255,255,255,0.15);
+    color: white;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+.sidebar-tab:hover:not(.active) {
+    background: rgba(255,255,255,0.05);
+    color: white;
+}
+.tab-content {
+    display: none;
+    flex-direction: column;
+    gap: 15px;
+}
+.tab-content.active {
+    display: flex;
+}
+
+/* Toggleable Sections */
+.toggle-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    padding: 8px 10px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin-bottom: 4px;
+    transition: background 0.2s;
+    user-select: none;
+}
+.toggle-header:hover {
+    background: rgba(255,255,255,0.1);
+}
+.toggle-icon {
+    transition: transform 0.2s;
+}
+.toggle-header.open .toggle-icon {
+    transform: rotate(90deg);
+}
+.toggle-content {
+    display: none;
+    padding: 8px;
+    background: rgba(0,0,0,0.15);
+    border-radius: 6px;
+    margin-bottom: 8px;
+}
+.toggle-content.active {
+    display: block;
+}
+
 .q-top { grid-column: 2; grid-row: 1; }
 .q-left { grid-column: 1; grid-row: 2; }
 .q-right { grid-column: 3; grid-row: 2; }

@@ -3,6 +3,9 @@
 Một phần mềm mô phỏng trực quan các thuật toán cốt lõi của **Reinforcement Learning** (dựa theo sách *Reinforcement Learning: An Introduction* - Sutton & Barto, Chapter 3 & 4), tập trung vào bài toán Markov Decision Process (MDP) hữu hạn.
 
 ## Tính năng chính
+### Các tính năng cốt lõi
+
+## Phần I: Tabular Methods
 - **Mô phỏng Môi trường (Environment)**: Tạo Grid tùy chỉnh kích thước, đặt các vật cản (Blocked), Terminal States có thưởng/phạt, và vị trí xuất phát (Start).
 - **Môi trường Deterministic & Stochastic**: Cho phép điều chỉnh tỉ lệ trượt (Slip probability) của Agent. Mặc định Agent chọn đi thẳng nhưng có thể cấu hình để có xác suất bị trượt sang hai bên.
 - **Dynamic Programming (Model-Based)**: 
@@ -22,7 +25,15 @@ Một phần mềm mô phỏng trực quan các thuật toán cốt lõi của *
   - **Q-Learning** (Off-policy TD Control)
   - **SARSA** (On-policy TD Control)
   - **Expected SARSA**
-  - **Double Q-Learning** (Khắc phục Maximization Bias)
+  - **Double Q-Learning**: Giảm thiểu Maximization Bias bằng cách dùng 2 bảng Q riêng biệt.
+
+## Phần II: Approximate Solution Methods
+- **On-policy Prediction với Function Approximation**: Thay vì lưu trữ mảng ma trận khổng lồ, thuật toán học bằng cách điều chỉnh các **Trọng số (Weights)** của hàm xấp xỉ $\hat{v}(s, w)$. Thể hiện mạnh mẽ sức mạnh của **Generalization** (Khái quát hóa).
+  - **Semi-gradient TD(0)**: Cập nhật trọng số thông qua vi phân bán phần (Semi-gradient).
+  - **Tính năng trích xuất đặc trưng (Feature Construction)**:
+    - **Tọa độ tuyến tính**: Môi trường học từ $x, y$.
+    - **Tile Coding**: Phương pháp kinh điển của RL. Sử dụng các lưới thưa (tiles) xếp chồng lên nhau để mô phỏng sự tương đồng về không gian. Tốc độ lan truyền kiến thức cực nhanh!
+
 - **Tính toán Q-Value $Q(s,a)$**: Xem chi tiết giá trị Action-Value cho từng hành động tại mỗi trạng thái bằng cách hover chuột lên Grid hoặc mở bảng **Q-Table Matrix** (Live update trong quá trình TD Learning).
 - **Mô phỏng Agent & Discounted Return ($G_t$)**: Thả Agent vào lưới và xem Agent di chuyển thực tế theo Policy, đồng thời hệ thống tự động tính toán tổng phần thưởng chiết khấu $G_t$.
 
