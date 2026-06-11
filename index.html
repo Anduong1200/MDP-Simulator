@@ -51,10 +51,14 @@
                                 <input type="number" id="cols" value="4" min="2" max="10">
                             </div>
                         </div>
-                        <button class="btn btn-primary" id="btnCreateGrid" onclick="createGrid()">
-                            <span>Tạo Grid</span>
+                        <div style="display: flex; gap: 10px;">
+                        <button class="btn btn-primary" id="btnRun" onclick="runAlgorithm()" style="flex: 2; padding: 12px; font-weight: 600;">
+                            ▶ Run Algorithm
                         </button>
-                    </section>
+                        <button class="btn btn-danger" id="btnStop" onclick="stopAlgorithm()" style="flex: 1; padding: 12px; font-weight: 600; background: #dc2626; border-color: #ef4444;" disabled>
+                            ⏹ Stop
+                        </button>
+                    </div>
 
                     <!-- Cell Editor -->
                     <section class="card" id="cellEditorCard" style="display:none;">
@@ -171,6 +175,19 @@
                             </div>
                         </div>
 
+                        <!-- PART III -->
+                        <div class="toggle-header" onclick="toggleSection('part3')">
+                            <span>🌟 Part III: Eligibility Traces</span>
+                            <span class="toggle-icon">▶</span>
+                        </div>
+                        <div class="toggle-content" id="part3" style="display: none;">
+                            <div class="algo-selector" style="flex-wrap:wrap; display: flex; gap: 4px;">
+                                <div class="subsection-title" style="flex-basis: 100%; font-size: 0.75rem; text-align: center; color: #eab308; margin-bottom: 2px;">Tabular Traces (Chapter 12)</div>
+                                <button class="btn btn-algo" id="btnTDLambda" onclick="selectAlgo('td_lambda')" style="flex-basis: 100%; background: rgba(234, 179, 8, 0.1); border-color: #eab308;">TD(λ) Prediction</button>
+                                <button class="btn btn-algo" id="btnSarsaLambda" onclick="selectAlgo('sarsa_lambda')" style="flex-basis: 100%; background: rgba(234, 179, 8, 0.1); border-color: #eab308; margin-top: 4px;">Sarsa(λ) Control</button>
+                            </div>
+                        </div>
+
                     </section>
 
                     <!-- Parameters -->
@@ -191,20 +208,18 @@
                                 <input type="number" id="stepReward" value="-0.04" step="0.01">
                             </div>
                             <div class="input-group" style="margin-top: 10px;">
-                                <label class="checkbox-label" style="display:flex; align-items:center; gap:8px; cursor:pointer; color:var(--text-primary); text-transform:none;">
-                                    <input type="checkbox" id="isStochastic" style="width:16px; height:16px;" onchange="toggleStochasticParams()">
-                                    <span>Môi trường Stochastic</span>
-                                </label>
-                                <div id="stochParams" style="display:none; margin-top:6px; padding-left:24px;">
-                                    <div class="input-row" style="margin-bottom:0;">
-                                        <div class="input-group">
-                                            <label for="slipProb" style="text-transform:none; font-size:0.7rem;">Tỉ lệ trượt (Slip %)</label>
-                                            <input type="number" id="slipProb" value="0.2" min="0" max="1" step="0.05" onchange="updateStochFormula()">
-                                        </div>
-                                    </div>
-                                    <p style="font-size:0.7rem; color:var(--text-muted); margin-top:4px;">Ví dụ 0.2: Đi thẳng 80%, trượt hai bên 10%.</p>
-                                </div>
-                            </div>
+                                <div class="control-group" style="display: flex; gap: 10px; align-items: center;">
+                            <label style="flex: 1; display: flex; align-items: center; cursor: pointer;">
+                                <input type="checkbox" id="stochastic" style="margin-right: 8px; cursor: pointer;">
+                                <span style="font-size: 0.85rem; color: #cbd5e1;">Stochastic (Trượt ngẫu nhiên)</span>
+                            </label>
+                        </div>
+                        <div class="control-group" style="display: flex; gap: 10px; align-items: center; margin-top: 5px;">
+                            <label style="flex: 1; display: flex; align-items: center; cursor: pointer;">
+                                <input type="checkbox" id="windy" style="margin-right: 8px; cursor: pointer;">
+                                <span style="font-size: 0.85rem; color: #cbd5e1;">Wind (Gió thổi lên trên)</span>
+                            </label>
+                        </div>
                         </div>
 
                         <!-- Core Hyperparameters -->
@@ -217,6 +232,10 @@
                                 <div class="input-group">
                                     <label for="gamma">γ (Discount)</label>
                                     <input type="number" id="gamma" value="0.9" min="0" max="0.999" step="0.01">
+                                </div>
+                                <div class="input-group" id="lambdaGroup" style="display:none;">
+                                    <label for="lambda">λ (Trace Decay)</label>
+                                    <input type="number" id="lambda" value="0.9" min="0" max="1" step="0.05">
                                 </div>
                                 <div class="input-group" id="thetaGroup">
                                     <label for="theta">θ (Threshold)</label>
@@ -249,6 +268,13 @@
                                         <input type="number" id="epsilon" value="0.2" min="0" max="1" step="0.01">
                                     </div>
                                 </div>
+                                <div class="input-group" id="traceTypeGroup" style="display:none; margin-top: 8px;">
+                                    <label for="traceType">Trace Type</label>
+                                    <select id="traceType" class="select-input">
+                                        <option value="accumulating">Accumulating Traces (Cộng dồn)</option>
+                                        <option value="replacing">Replacing Traces (Ghi đè)</option>
+                                    </select>
+                                </div>
                                 <div class="input-row" style="margin-top: 8px;">
                                     <div class="input-group">
                                         <label for="episodes">Episodes</label>
@@ -262,14 +288,39 @@
                                         <label for="planningSteps">Planning Steps</label>
                                         <input type="number" id="planningSteps" value="10" min="0" step="1">
                                     </div>
-                                    <div class="input-group" id="featureGroup" style="display:none;">
-                                        <label for="featureType">Feature Type</label>
-                                        <select id="featureType">
-                                            <option value="coord">Coordinates (x,y)</option>
-                                            <option value="tile">Tile Coding</option>
-                                        </select>
+                            <!-- Approximate Methods Params -->
+                        <div class="toggle-header" onclick="toggleSection('featureGroup')">
+                            <span>🛠 Function Approx Parameters</span>
+                            <span class="toggle-icon">▶</span>
+                        </div>
+                        <div class="toggle-content" id="featureGroup" style="display: none;">
+                            <div class="control-group">
+                                <label for="featureType">Feature Engineering</label>
+                                <select id="featureType" class="select-input">
+                                    <option value="coord">Tọa độ (X, Y)</option>
+                                    <option value="tile" selected>Tile Coding (Lưới xếp chồng)</option>
+                                </select>
+                            </div>
+                            <div class="control-group" id="tileCodingGroup">
+                                <div style="display: flex; gap: 10px;">
+                                    <div style="flex: 1;">
+                                        <label for="numTilings">Num Tilings</label>
+                                        <input type="number" id="numTilings" class="num-input" value="4" min="1" max="10">
+                                    </div>
+                                    <div style="flex: 1;">
+                                        <label for="tileSize">Tile Size</label>
+                                        <input type="number" id="tileSize" class="num-input" value="3" min="1" max="10">
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+
+                            <!-- Animation Toggle -->
+                            <div class="control-group" style="margin-top: 15px; margin-bottom: 0;">
+                                <label style="display: flex; align-items: center; cursor: pointer; color: #facc15; font-weight: 500;">
+                                    <input type="checkbox" id="animateAgent" style="margin-right: 8px; cursor: pointer;">
+                                    <span style="font-size: 0.85rem;">🎬 Watch Agent (Animate final 5 eps)</span>
+                                </label>
                             </div>
                         </div>
 
