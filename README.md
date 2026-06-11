@@ -9,6 +9,9 @@ Một phần mềm mô phỏng trực quan các thuật toán cốt lõi của *
   - **Value Iteration & Policy Iteration**: Trực quan hóa từng bước hội tụ (sweep) bằng hiệu ứng Animation thời gian thực. Hỗ trợ đầy đủ **Asynchronous Dynamic Programming** (Gauss-Seidel in-place updates) giúp tăng tốc độ hội tụ.
   - **Generalized Policy Iteration (GPI)**: Thay đổi số lượng vòng lặp Policy Evaluation ($k$) tối đa để mô phỏng sự dịch chuyển mượt mà giữa Value Iteration và Policy Iteration.
   - **Đánh giá Policy (Policy Evaluation)**: Vẽ tay một Policy bất kỳ và giải phương trình Bellman Expectation để tìm Value function $V_\pi(s)$.
+- **Monte Carlo Methods (Episodic Model-Free)**: Mô phỏng phương pháp học thông qua kinh nghiệm từ từng Episode hoàn chỉnh.
+  - **On-policy MC Control**: Học giá trị và tối ưu Policy dựa trên chính sách đang sử dụng (First-visit MC).
+  - **Off-policy MC Control**: Học Policy tối ưu từ các tập kinh nghiệm sinh ra bởi Behavior Policy ngẫu nhiên thông qua Weighted Importance Sampling.
 - **Temporal-Difference Learning (Model-Free)**: Mô phỏng quá trình Agent tự học thông qua tương tác trực tiếp với môi trường (Trial and Error). Hỗ trợ đầy đủ các thuật toán cốt lõi của Chapter 6:
   - **Q-Learning** (Off-policy TD Control)
   - **SARSA** (On-policy TD Control)

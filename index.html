@@ -142,7 +142,13 @@
                         <button class="btn btn-algo" id="btnPE" onclick="selectAlgo('pe')" style="flex-basis: 100%; margin-top: 4px;">Evaluate Policy</button>
                         
                         <div style="flex-basis: 100%; height: 1px; background: rgba(255,255,255,0.1); margin: 6px 0;"></div>
-                        <div class="subsection-title" style="flex-basis: 100%; font-size: 0.75rem; text-align: center; color: var(--green); margin-bottom: 2px;">TD Learning (Model-Free)</div>
+                        <div class="subsection-title" style="flex-basis: 100%; font-size: 0.75rem; text-align: center; color: var(--accent); margin-bottom: 2px;">Monte Carlo (Episodic)</div>
+                        
+                        <button class="btn btn-algo" id="btnMCOn" onclick="selectAlgo('mc_on')" style="flex:1; background: rgba(56, 189, 248, 0.1); border-color: var(--accent);">On-policy MC</button>
+                        <button class="btn btn-algo" id="btnMCOff" onclick="selectAlgo('mc_off')" style="flex:1; background: rgba(56, 189, 248, 0.1); border-color: var(--accent);">Off-policy MC</button>
+                        
+                        <div style="flex-basis: 100%; height: 1px; background: rgba(255,255,255,0.1); margin: 6px 0;"></div>
+                        <div class="subsection-title" style="flex-basis: 100%; font-size: 0.75rem; text-align: center; color: var(--green); margin-bottom: 2px;">TD Learning (Step-by-step)</div>
                         
                         <button class="btn btn-algo" id="btnQL" onclick="selectAlgo('ql')" style="flex:1; background: rgba(52, 211, 153, 0.1); border-color: var(--green);">Q-Learning</button>
                         <button class="btn btn-algo" id="btnSARSA" onclick="selectAlgo('sarsa')" style="flex:1; background: rgba(52, 211, 153, 0.1); border-color: var(--green);">SARSA</button>
@@ -170,22 +176,22 @@
                         </div>
                     </div>
 
-                    <!-- TD Learning Params -->
-                    <div id="tdParams" style="display:none; margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.1);">
-                        <h3 class="subsection-title">TD Learning Params</h3>
+                    <!-- Model-Free Params -->
+                    <div id="mfParams" style="display:none; margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.1);">
+                        <h3 class="subsection-title">Model-Free Params</h3>
                         <div class="input-row">
-                            <div class="input-group">
+                            <div class="input-group" id="alphaGroup">
                                 <label for="alpha">α (Learning Rate)</label>
-                                <input type="number" id="alpha" value="0.1" min="0" max="1" step="0.05">
+                                <input type="number" id="alpha" value="0.1" min="0" max="1" step="0.01">
                             </div>
                             <div class="input-group">
                                 <label for="epsilon">ε (Exploration)</label>
-                                <input type="number" id="epsilon" value="0.2" min="0" max="1" step="0.05">
+                                <input type="number" id="epsilon" value="0.2" min="0" max="1" step="0.01">
                             </div>
-                        </div>
-                        <div class="input-group">
-                            <label for="episodes">Số lượng Episodes</label>
-                            <input type="number" id="episodes" value="1000" min="1" step="10">
+                            <div class="input-group">
+                                <label for="episodes">Episodes</label>
+                                <input type="number" id="episodes" value="1000" min="1" step="100">
+                            </div>
                         </div>
                     </div>
 

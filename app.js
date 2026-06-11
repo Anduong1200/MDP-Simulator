@@ -344,14 +344,20 @@ function selectAlgo(algo) {
     document.getElementById('btnPI').classList.toggle('active', algo === 'pi');
     document.getElementById('btnPE').classList.toggle('active', algo === 'pe');
     
+    document.getElementById('btnMCOn').classList.toggle('active', algo === 'mc_on');
+    document.getElementById('btnMCOff').classList.toggle('active', algo === 'mc_off');
+    
     document.getElementById('btnQL').classList.toggle('active', algo === 'ql');
     document.getElementById('btnSARSA').classList.toggle('active', algo === 'sarsa');
     document.getElementById('btnESARSA').classList.toggle('active', algo === 'esarsa');
     document.getElementById('btnDQL').classList.toggle('active', algo === 'dql');
     
     const isTD = ['ql', 'sarsa', 'esarsa', 'dql'].includes(algo);
+    const isMC = ['mc_on', 'mc_off'].includes(algo);
+    
     document.getElementById('piInitSection').style.display = (algo === 'pi' || algo === 'pe') ? '' : 'none';
-    document.getElementById('tdParams').style.display = isTD ? '' : 'none';
+    document.getElementById('mfParams').style.display = (isTD || isMC) ? '' : 'none';
+    document.getElementById('alphaGroup').style.display = isTD ? '' : 'none';
     
     currentV = [];
     currentPolicy = [];
@@ -716,6 +722,164 @@ async function runPolicyEvaluationStandalone(gamma, theta, stepReward) {
     return { V, policy };
 }
 
+// ── Monte Carlo Control (Episodic Model-Free) ──
+async function runMonteCarloControl(algo, epsilon, episodes, gamma, stepReward) {
+    if (!startCell) {
+        alert('Cần đặt Start State để chạy Monte Carlo!');
+        return { V: currentV, policy: currentPolicy };
+    }
+
+    const algoNames = { mc_on: 'On-policy MC Control', mc_off: 'Off-policy MC Control' };
+    logLines = [];
+    logLines.push({ type: 'header', text: `═══ ${algoNames[algo]} ═══` });
+    renderLog();
+
+    let returns = [];
+    let C = [];
+    for (let r = 0; r < gridRows; r++) {
+        returns[r] = [];
+        C[r] = [];
+        for (let c = 0; c < gridCols; c++) {
+            qMatrix[r][c] = { U: 0, D: 0, L: 0, R: 0 };
+            returns[r][c] = { U: {sum:0, count:0}, D: {sum:0, count:0}, L: {sum:0, count:0}, R: {sum:0, count:0} };
+            C[r][c] = { U: 0, D: 0, L: 0, R: 0 };
+        }
+    }
+
+    let V = Array.from({ length: gridRows }, () => Array(gridCols).fill(0));
+    let policy = Array.from({ length: gridRows }, () => Array(gridCols).fill('U'));
+
+    function getEpsilonGreedyAction(r, c, targetPolicy, eps) {
+        if (Math.random() < eps) {
+            return ACTION_KEYS[Math.floor(Math.random() * 4)];
+        }
+        return targetPolicy[r][c];
+    }
+    
+    // Init greedy policy arbitrarily
+    for (let r = 0; r < gridRows; r++) {
+        for (let c = 0; c < gridCols; c++) {
+            policy[r][c] = ACTION_KEYS[Math.floor(Math.random() * 4)];
+        }
+    }
+
+    for (let ep = 1; ep <= episodes; ep++) {
+        let episode = []; 
+        let currR = startCell.r;
+        let currC = startCell.c;
+        let steps = 0;
+        
+        agentPos = { r: currR, c: currC };
+        updateAgentPosition();
+
+        // 1. Generate Episode
+        while (!isTerminal(currR, currC) && steps < 1000) {
+            steps++;
+            let action = getEpsilonGreedyAction(currR, currC, policy, epsilon);
+
+            const probs = getNextStateProbabilities(currR, currC, action);
+            const rand = Math.random();
+            let cumulative = 0;
+            let nextR = currR, nextC = currC;
+            for (const p of probs) {
+                cumulative += p.prob;
+                if (rand <= cumulative) { nextR = p.nr; nextC = p.nc; break; }
+            }
+
+            const reward = getReward(currR, currC, action, nextR, nextC, stepReward);
+            
+            episode.push({ r: currR, c: currC, action, reward });
+            currR = nextR;
+            currC = nextC;
+            
+            agentPos = { r: currR, c: currC };
+            renderGrid();
+            await sleep(0); // Rất nhanh
+        }
+
+        // 2. Backward Update (G_t)
+        if (isTerminal(currR, currC)) {
+            let G = 0;
+            let W = 1.0;
+            
+            for (let t = episode.length - 1; t >= 0; t--) {
+                const step = episode[t];
+                G = gamma * G + step.reward;
+
+                if (algo === 'mc_on') {
+                    // First-visit check
+                    let isFirstVisit = true;
+                    for (let i = 0; i < t; i++) {
+                        if (episode[i].r === step.r && episode[i].c === step.c && episode[i].action === step.action) {
+                            isFirstVisit = false;
+                            break;
+                        }
+                    }
+                    if (isFirstVisit) {
+                        returns[step.r][step.c][step.action].sum += G;
+                        returns[step.r][step.c][step.action].count += 1;
+                        qMatrix[step.r][step.c][step.action] = returns[step.r][step.c][step.action].sum / returns[step.r][step.c][step.action].count;
+                        
+                        let bestA = 'U', bestQ = -Infinity;
+                        for (const a of ACTION_KEYS) {
+                            if (qMatrix[step.r][step.c][a] > bestQ) { bestQ = qMatrix[step.r][step.c][a]; bestA = a; }
+                        }
+                        policy[step.r][step.c] = bestA;
+                    }
+                } else if (algo === 'mc_off') {
+                    C[step.r][step.c][step.action] += W;
+                    qMatrix[step.r][step.c][step.action] += (W / C[step.r][step.c][step.action]) * (G - qMatrix[step.r][step.c][step.action]);
+                    
+                    let bestA = 'U', bestQ = -Infinity;
+                    for (const a of ACTION_KEYS) {
+                        if (qMatrix[step.r][step.c][a] > bestQ) { bestQ = qMatrix[step.r][step.c][a]; bestA = a; }
+                    }
+                    policy[step.r][step.c] = bestA;
+
+                    if (step.action !== policy[step.r][step.c]) {
+                        break; 
+                    }
+                    
+                    let b_prob = epsilon / 4.0;
+                    if (step.action === policy[step.r][step.c]) {
+                        b_prob += (1.0 - epsilon);
+                    }
+                    W = W * (1.0 / b_prob);
+                }
+            }
+        }
+        
+        for (let r = 0; r < gridRows; r++) {
+            for (let c = 0; c < gridCols; c++) {
+                if (!isBlocked(r,c) && !isTerminal(r,c)) {
+                    let bestQ = -Infinity;
+                    for (const a of ACTION_KEYS) {
+                        if (qMatrix[r][c][a] > bestQ) bestQ = qMatrix[r][c][a];
+                    }
+                    V[r][c] = bestQ === -Infinity ? 0 : bestQ;
+                }
+            }
+        }
+
+        currentV = V;
+        currentPolicy = policy;
+        renderGrid();
+        
+        if (ep % Math.ceil(episodes/10) === 0 || ep === episodes) {
+            logLines.push({ type: 'entry', text: `Episode ${ep}/${episodes} completed.` });
+            renderLog();
+        }
+        
+        if (document.getElementById('qTableModal').style.display === 'flex') {
+            renderQTable();
+        }
+    }
+    
+    agentPos = null;
+    updateAgentPosition();
+    return { V, policy };
+}
+
 // ── TD Learning Control (Model-Free) ──
 async function runTDControl(algo, alpha, epsilon, episodes, gamma, stepReward) {
     if (!startCell) {
@@ -911,6 +1075,7 @@ async function runAlgorithm() {
     resetSimulation();
 
     const isTD = ['ql', 'sarsa', 'esarsa', 'dql'].includes(selectedAlgo);
+    const isMC = ['mc_on', 'mc_off'].includes(selectedAlgo);
     let result;
     if (selectedAlgo === 'vi') {
         result = await runValueIteration(gamma, theta, isNaN(stepReward) ? -0.04 : stepReward);
@@ -923,6 +1088,10 @@ async function runAlgorithm() {
         const epsilon = parseFloat(document.getElementById('epsilon').value) || 0.2;
         const episodes = parseInt(document.getElementById('episodes').value) || 1000;
         result = await runTDControl(selectedAlgo, alpha, epsilon, episodes, gamma, isNaN(stepReward) ? -0.04 : stepReward);
+    } else if (isMC) {
+        const epsilon = parseFloat(document.getElementById('epsilon').value) || 0.2;
+        const episodes = parseInt(document.getElementById('episodes').value) || 1000;
+        result = await runMonteCarloControl(selectedAlgo, epsilon, episodes, gamma, isNaN(stepReward) ? -0.04 : stepReward);
     }
 
     currentV = result.V;
