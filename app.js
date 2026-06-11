@@ -21,6 +21,9 @@ let currentPolicy = [];  // 2D: action string
 let displayMode = 'both';
 let isRunning = false;
 let isStochastic = false;
+let logLines = [];       // Lưu log toàn cục để render dần
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // ── Simulation State ──
 let simInterval = null;
@@ -405,13 +408,14 @@ function isTerminal(r, c) { return cells[r][c].type === 'terminal'; }
 function isBlocked(r, c) { return cells[r][c].type === 'blocked'; }
 
 // ── Value Iteration ──
-function runValueIteration(gamma, theta, stepReward) {
+async function runValueIteration(gamma, theta, stepReward) {
     const V = Array.from({ length: gridRows }, () => Array(gridCols).fill(0));
     let iterations = 0;
     let finalDelta = Infinity;
 
-    const logLines = [];
+    logLines = [];
     logLines.push({ type: 'header', text: `═══ Value Iteration (${isStochastic?'Stochastic':'Deterministic'}) ═══` });
+    renderLog();
 
     while (iterations < 10000) {
         iterations++;
@@ -440,16 +444,25 @@ function runValueIteration(gamma, theta, stepReward) {
         }
         for (let r = 0; r < gridRows; r++) V[r] = newV[r];
         finalDelta = delta;
+        
+        // Cập nhật UI ngay lập tức
+        currentV = V;
+        renderGrid();
+        await sleep(50); // Delay nhỏ để nhìn thấy hiệu ứng Sweep
+
         if (delta < theta) break;
     }
 
     // Extract policy
     const policy = extractPolicy(V, gamma, stepReward);
+    currentPolicy = policy;
+    renderGrid();
 
     logLines.push({ type: 'entry', text: `Hội tụ sau ${iterations} vòng lặp` });
     logLines.push({ type: 'entry', text: `Delta cuối: ${finalDelta.toFixed(8)}` });
+    renderLog();
 
-    return { V, policy, logLines };
+    return { V, policy };
 }
 
 function extractPolicy(V, gamma, stepReward) {
@@ -493,7 +506,7 @@ function getInitialPolicy() {
     return policy;
 }
 
-function evaluatePolicyFixed(policy, V, gamma, theta, stepReward) {
+async function evaluatePolicyFixed(policy, V, gamma, theta, stepReward) {
     let evalSweeps = 0;
     while (true) {
         evalSweeps++;
@@ -516,25 +529,39 @@ function evaluatePolicyFixed(policy, V, gamma, theta, stepReward) {
             }
         }
         for (let r = 0; r < gridRows; r++) V[r] = newV[r];
+        
+        currentV = V;
+        renderGrid();
+        await sleep(20); // Render nhanh cho PE sweeps
+
         if (delta < theta) return evalSweeps;
     }
 }
 
-function runPolicyIteration(gamma, theta, stepReward) {
+async function runPolicyIteration(gamma, theta, stepReward) {
     const policy = getInitialPolicy();
-    const logLines = [];
+    logLines = [];
     logLines.push({ type: 'header', text: `═══ Policy Iteration (${isStochastic?'Stochastic':'Deterministic'}) ═══` });
+    renderLog();
 
     let V = Array.from({ length: gridRows }, () => Array(gridCols).fill(0));
     let iterations = 0;
 
+    currentPolicy = policy;
+    renderGrid();
+    await sleep(300); // Ngưng 1 chút để xem policy ban đầu
+
     while (iterations < 10000) {
         iterations++;
         logLines.push({ type: 'iteration', text: `── Vòng lặp ${iterations} ──` });
+        renderLog();
 
         // Policy Evaluation
-        const sweeps = evaluatePolicyFixed(policy, V, gamma, theta, stepReward);
+        const sweeps = await evaluatePolicyFixed(policy, V, gamma, theta, stepReward);
         logLines.push({ type: 'sweep', text: `    Hội tụ sau ${sweeps} sweep` });
+        renderLog();
+        
+        await sleep(100);
 
         // Policy Improvement
         let stable = true;
@@ -562,35 +589,46 @@ function runPolicyIteration(gamma, theta, stepReward) {
             }
         }
 
+        currentPolicy = policy;
+        renderGrid();
+
         if (changes.length > 0) {
             logLines.push({ type: 'entry', text: `    ${changes.length} ô thay đổi` });
         }
+        renderLog();
+
+        await sleep(200);
 
         if (stable) {
             logLines.push({ type: 'stable', text: `✓ Policy STABLE! Kết thúc sau ${iterations} vòng.` });
+            renderLog();
             break;
         }
     }
 
-    return { V, policy, logLines, iterations };
+    return { V, policy };
 }
 
 // ── Policy Evaluation Standalone ──
-function runPolicyEvaluationStandalone(gamma, theta, stepReward) {
+async function runPolicyEvaluationStandalone(gamma, theta, stepReward) {
     const policy = getInitialPolicy();
-    const logLines = [];
+    logLines = [];
     logLines.push({ type: 'header', text: `═══ Evaluate Current Policy (${isStochastic?'Stochastic':'Deterministic'}) ═══` });
     logLines.push({ type: 'entry', text: `Chỉ tính V(s) cho Policy hiện hành, KHÔNG tối ưu.` });
+    renderLog();
 
     let V = Array.from({ length: gridRows }, () => Array(gridCols).fill(0));
-    const sweeps = evaluatePolicyFixed(policy, V, gamma, theta, stepReward);
+    currentPolicy = policy;
+    const sweeps = await evaluatePolicyFixed(policy, V, gamma, theta, stepReward);
     
     logLines.push({ type: 'sweep', text: `Hội tụ sau ${sweeps} sweep` });
-    return { V, policy, logLines };
+    renderLog();
+    return { V, policy };
 }
 
 // ── Run Setup ──
-function runAlgorithm() {
+async function runAlgorithm() {
+    if (isRunning) return;
     isStochastic = document.getElementById('isStochastic').checked;
     
     // Validate: at least 1 terminal
@@ -609,29 +647,39 @@ function runAlgorithm() {
     const theta = parseFloat(document.getElementById('theta').value) || 0.0001;
     const stepReward = parseFloat(document.getElementById('stepReward').value);
 
+    // Show log panel
+    document.getElementById('logPanel').style.display = '';
+    document.querySelector('.main-layout').classList.remove('no-log');
+    
+    const btnRun = document.getElementById('btnRun');
+    btnRun.disabled = true;
+    btnRun.innerHTML = `<span class="run-icon">⏳</span> Đang Chạy...`;
+    isRunning = true;
+    
+    currentV = [];
+    currentPolicy = [];
+    resetSimulation();
+
     let result;
     if (selectedAlgo === 'vi') {
-        result = runValueIteration(gamma, theta, isNaN(stepReward) ? -0.04 : stepReward);
+        result = await runValueIteration(gamma, theta, isNaN(stepReward) ? -0.04 : stepReward);
     } else if (selectedAlgo === 'pi') {
-        result = runPolicyIteration(gamma, theta, isNaN(stepReward) ? -0.04 : stepReward);
+        result = await runPolicyIteration(gamma, theta, isNaN(stepReward) ? -0.04 : stepReward);
     } else {
-        result = runPolicyEvaluationStandalone(gamma, theta, isNaN(stepReward) ? -0.04 : stepReward);
+        result = await runPolicyEvaluationStandalone(gamma, theta, isNaN(stepReward) ? -0.04 : stepReward);
     }
 
     currentV = result.V;
     currentPolicy = result.policy;
-
-    // Show log panel
-    document.getElementById('logPanel').style.display = '';
-    document.querySelector('.main-layout').classList.remove('no-log');
-    renderLog(result.logLines);
     renderGrid();
     
-    resetSimulation();
+    btnRun.disabled = false;
+    btnRun.innerHTML = `<span class="run-icon">▶</span> Chạy Thuật Toán`;
+    isRunning = false;
 }
 
 // ── Log ──
-function renderLog(logLines) {
+function renderLog() {
     const logEl = document.getElementById('logContent');
     logEl.innerHTML = '';
     for (const line of logLines) {

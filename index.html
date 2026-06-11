@@ -9,6 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="index.css">
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 </head>
 <body>
     <div class="app">
@@ -99,10 +100,17 @@
                     </div>
                     <div class="input-group" style="margin-top: 10px;">
                         <label class="checkbox-label" style="display:flex; align-items:center; gap:8px; cursor:pointer; color:var(--text-primary); text-transform:none;">
-                            <input type="checkbox" id="isStochastic" style="width:16px; height:16px;">
+                            <input type="checkbox" id="isStochastic" style="width:16px; height:16px;" onchange="document.getElementById('stochFormula').style.display = this.checked ? 'block' : 'none'">
                             <span>Môi trường Stochastic (20% trượt)</span>
                         </label>
                         <p style="font-size:0.7rem; color:var(--text-muted); margin-top:4px;">Nếu bật: Đi thẳng 80%, trượt sang 2 bên mỗi bên 10%.</p>
+                        <div id="stochFormula" style="display:none; font-size:0.75rem; color:var(--accent-bright); background:rgba(15,23,42,0.6); padding:8px; border-radius:4px; margin-top:4px;">
+                            \( p(s'|s,a) = \begin{cases} 
+                            0.8 & \text{hướng } a \\ 
+                            0.1 & \text{vuông góc 1} \\ 
+                            0.1 & \text{vuông góc 2} 
+                            \end{cases} \)
+                        </div>
                     </div>
                 </section>
 
@@ -160,6 +168,10 @@
                             <span class="run-icon">▶</span> Chạy Thuật Toán
                         </button>
                     </div>
+                    <div style="margin-top:12px; font-size:0.75rem; color:var(--text-secondary); background:rgba(99,102,241,0.05); padding:8px; border-radius:4px; border:1px solid rgba(99,102,241,0.1);">
+                        <div style="margin-bottom:4px; font-weight:600; color:var(--text-primary);">Q-Value Formula:</div>
+                        \( Q(s,a) \doteq \sum_{s', r} p(s',r|s,a) [r + \gamma V(s')] \)
+                    </div>
                 </section>
 
                 <!-- Simulation -->
@@ -168,7 +180,10 @@
                         <span class="card-icon">🏃</span>
                         Agent Simulation
                     </h2>
-                    <p class="card-desc">Chạy mô phỏng để tính Return \( G_t \)</p>
+                    <p class="card-desc">Chạy mô phỏng để tính Return</p>
+                    <div style="font-size:0.75rem; margin-bottom:12px; padding:8px; background:rgba(15,23,42,0.5); border-radius:4px; color:var(--text-secondary);">
+                        \( G_t \doteq R_{t+1} + \gamma R_{t+2} + \gamma^2 R_{t+3} + \dots \)
+                    </div>
                     <div class="sim-stats" style="margin-bottom: 10px; padding: 10px; background: rgba(96,165,250,0.1); border-radius: 6px;">
                         <div style="font-size: 0.8rem; color: var(--text-secondary);">Return <span style="font-family: var(--font-mono)">G₀</span></div>
                         <div id="simReturn" style="font-family: var(--font-mono); font-size: 1.2rem; font-weight: bold; color: var(--blue);">0.00</div>
