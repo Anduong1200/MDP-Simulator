@@ -151,8 +151,8 @@ function createGrid() {
     document.getElementById('gridWrapper').style.display = '';
     document.getElementById('gridLabel').textContent = `${m} × ${n} Grid`;
     
-    // Default show simCard
-    document.getElementById('simCard').style.display = '';
+    // Default show logPanel (right panel)
+    document.getElementById('logPanel').style.display = '';
 
     renderGrid();
 }
@@ -463,6 +463,7 @@ function selectAlgo(algo) {
     toggleBtn('btnDynaQ', algo === 'dynaq');
     toggleBtn('btnPrioritizedSweeping', algo === 'prioritized_sweeping');
 
+    toggleBtn('btnSemiGradTD', algo === 'semi_grad_td');
     toggleBtn('btnSemiGradSarsa', algo === 'semi_grad_sarsa');
     
     toggleBtn('btnTDLambda', algo === 'td_lambda');
@@ -840,7 +841,7 @@ async function runPolicyEvaluation(gamma, theta, stepReward) {
 
 // ── TD Learning ──
 async function runTDControl(algo, alpha, epsilon, episodes, gamma, stepReward) {
-    if (!startCell) return { V: currentV, policy: currentPolicy };
+    if (!startCell) { alert('Vui lòng chọn 1 ô Start (S) trên lưới trước khi chạy!'); return { V: currentV, policy: currentPolicy }; }
     const algoNames = { ql: 'Q-Learning', sarsa: 'SARSA', esarsa: 'Expected SARSA', dql: 'Double Q-Learning' };
     logLines = []; logLines.push({ type: 'header', text: '═══ ' + algoNames[algo] + ' ═══' }); renderLog();
     initChart();
@@ -925,7 +926,7 @@ function getEpsilonGreedyAction(r, c, Q, eps) {
 
 // ── Tabular Eligibility Traces (Chapter 12) ──
 async function runTDLambda(alpha, episodes, gamma, lambda, traceType, stepReward) {
-    if (!startCell) return { V: currentV, policy: currentPolicy };
+    if (!startCell) { alert('Vui lòng chọn 1 ô Start (S) trên lưới trước khi chạy!'); return { V: currentV, policy: currentPolicy }; }
     logLines = []; logLines.push({ type: 'header', text: '═══ Tabular TD(λ) ═══' }); renderLog();
     initChart();
     let V = Array.from({ length: gridRows }, () => Array(gridCols).fill(0));
@@ -983,7 +984,7 @@ async function runTDLambda(alpha, episodes, gamma, lambda, traceType, stepReward
 }
 
 async function runSarsaLambda(alpha, epsilon, episodes, gamma, lambda, traceType, stepReward) {
-    if (!startCell) return { V: currentV, policy: currentPolicy };
+    if (!startCell) { alert('Vui lòng chọn 1 ô Start (S) trên lưới trước khi chạy!'); return { V: currentV, policy: currentPolicy }; }
     logLines = []; logLines.push({ type: 'header', text: '═══ Tabular Sarsa(λ) ═══' }); renderLog();
     initChart();
     let Q = Array.from({ length: gridRows }, () => Array.from({ length: gridCols }, () => ({U:0, D:0, L:0, R:0})));
@@ -1059,7 +1060,7 @@ async function runSarsaLambda(alpha, epsilon, episodes, gamma, lambda, traceType
 
 
 async function runMonteCarloControl(algo, epsilon, episodes, gamma, stepReward) {
-    if (!startCell) return { V: currentV, policy: currentPolicy };
+    if (!startCell) { alert('Vui lòng chọn 1 ô Start (S) trên lưới trước khi chạy!'); return { V: currentV, policy: currentPolicy }; }
     let returns = {}, counts = {};
     for (let r = 0; r < gridRows; r++) {
         returns[r] = {}; counts[r] = {};
@@ -1117,7 +1118,7 @@ async function runMonteCarloControl(algo, epsilon, episodes, gamma, stepReward) 
 }
 
 async function runNStepControl(algo, nStep, alpha, epsilon, episodes, gamma, stepReward) {
-    if (!startCell) return { V: currentV, policy: currentPolicy };
+    if (!startCell) { alert('Vui lòng chọn 1 ô Start (S) trên lưới trước khi chạy!'); return { V: currentV, policy: currentPolicy }; }
     for (let r = 0; r < gridRows; r++) for (let c = 0; c < gridCols; c++) qMatrix[r][c] = { U: 0, D: 0, L: 0, R: 0 };
     let V = Array.from({ length: gridRows }, () => Array(gridCols).fill(0));
     let policy = Array.from({ length: gridRows }, () => Array(gridCols).fill('U'));
@@ -1164,7 +1165,7 @@ async function runNStepControl(algo, nStep, alpha, epsilon, episodes, gamma, ste
 }
 
 async function runDynaControl(algo, planningSteps, alpha, epsilon, episodes, gamma, stepReward) {
-    if (!startCell) return { V: currentV, policy: currentPolicy };
+    if (!startCell) { alert('Vui lòng chọn 1 ô Start (S) trên lưới trước khi chạy!'); return { V: currentV, policy: currentPolicy }; }
     for (let r = 0; r < gridRows; r++) for (let c = 0; c < gridCols; c++) qMatrix[r][c] = { U: 0, D: 0, L: 0, R: 0 };
     let V = Array.from({ length: gridRows }, () => Array(gridCols).fill(0));
     let policy = Array.from({ length: gridRows }, () => Array(gridCols).fill('U'));
@@ -1207,7 +1208,7 @@ async function runDynaControl(algo, planningSteps, alpha, epsilon, episodes, gam
 }
 
 async function runApproximatePrediction(algo, alpha, episodes, gamma, stepReward, featureType) {
-    if (!startCell) return { V: currentV, policy: currentPolicy };
+    if (!startCell) { alert('Vui lòng chọn 1 ô Start (S) trên lưới trước khi chạy!'); return { V: currentV, policy: currentPolicy }; }
     let V = Array.from({ length: gridRows }, () => Array(gridCols).fill(0));
     let policy = Array.from({ length: gridRows }, () => Array(gridCols).fill('?'));
     for (let r = 0; r < gridRows; r++) for (let c = 0; c < gridCols; c++) policy[r][c] = ACTION_KEYS[Math.floor(Math.random() * 4)];
@@ -1232,7 +1233,7 @@ async function runApproximatePrediction(algo, alpha, episodes, gamma, stepReward
 }
 
 async function runApproximateControl(algo, alpha, epsilon, episodes, gamma, stepReward, featureType) {
-    if (!startCell) return { V: currentV, policy: currentPolicy };
+    if (!startCell) { alert('Vui lòng chọn 1 ô Start (S) trên lưới trước khi chạy!'); return { V: currentV, policy: currentPolicy }; }
     let V = Array.from({ length: gridRows }, () => Array(gridCols).fill(0));
     let policy = Array.from({ length: gridRows }, () => Array(gridCols).fill('U'));
     for (let r = 0; r < gridRows; r++) for (let c = 0; c < gridCols; c++) qMatrix[r][c] = { U: 0, D: 0, L: 0, R: 0 };
@@ -1290,7 +1291,7 @@ function getSoftmaxAction(probs) {
 }
 
 async function runREINFORCE(alpha, episodes, gamma, stepReward) {
-    if (!startCell) return { V: currentV, policy: currentPolicy };
+    if (!startCell) { alert('Vui lòng chọn 1 ô Start (S) trên lưới trước khi chạy!'); return { V: currentV, policy: currentPolicy }; }
     logLines = []; logLines.push({ type: 'header', text: '═══ REINFORCE ═══' }); renderLog();
     initChart();
     
@@ -1363,7 +1364,7 @@ async function runREINFORCE(alpha, episodes, gamma, stepReward) {
 }
 
 async function runREINFORCEBaseline(alpha_theta, alpha_w, episodes, gamma, stepReward) {
-    if (!startCell) return { V: currentV, policy: currentPolicy };
+    if (!startCell) { alert('Vui lòng chọn 1 ô Start (S) trên lưới trước khi chạy!'); return { V: currentV, policy: currentPolicy }; }
     logLines = []; logLines.push({ type: 'header', text: '═══ REINFORCE w/ Baseline ═══' }); renderLog();
     initChart();
     
@@ -1432,7 +1433,7 @@ async function runREINFORCEBaseline(alpha_theta, alpha_w, episodes, gamma, stepR
 }
 
 async function runActorCritic(alpha_theta, alpha_w, episodes, gamma, stepReward) {
-    if (!startCell) return { V: currentV, policy: currentPolicy };
+    if (!startCell) { alert('Vui lòng chọn 1 ô Start (S) trên lưới trước khi chạy!'); return { V: currentV, policy: currentPolicy }; }
     logLines = []; logLines.push({ type: 'header', text: '═══ One-step Actor-Critic ═══' }); renderLog();
     initChart();
     
@@ -1507,6 +1508,7 @@ async function runAlgorithm() {
     const isDyna = ['dynaq', 'prioritized_sweeping'].includes(selectedAlgo);
     const isApprox = ['semi_grad_td', 'semi_grad_sarsa'].includes(selectedAlgo);
     const isLambda = ['td_lambda', 'sarsa_lambda'].includes(selectedAlgo);
+    const isPG = ['reinforce', 'reinforce_base', 'actor_critic'].includes(selectedAlgo);
 
     let result;
     if (selectedAlgo === 'vi') {
@@ -1545,6 +1547,45 @@ async function runAlgorithm() {
         } else {
             result = await runSarsaLambda(alpha, epsilon, episodes, gamma, lambda, traceType, isNaN(stepReward) ? -0.04 : stepReward);
         }
+    } else if (isMC) {
+        const alpha = parseFloat(document.getElementById('alpha').value) || 0.1;
+        const epsilon = parseFloat(document.getElementById('epsilon').value) || 0.2;
+        const episodes = parseInt(document.getElementById('episodes').value) || 1000;
+        result = await runMCControl(selectedAlgo, alpha, epsilon, episodes, gamma, isNaN(stepReward) ? -0.04 : stepReward);
+    } else if (isNStep) {
+        const alpha = parseFloat(document.getElementById('alpha').value) || 0.1;
+        const epsilon = parseFloat(document.getElementById('epsilon').value) || 0.2;
+        const episodes = parseInt(document.getElementById('episodes').value) || 1000;
+        const nStep = parseInt(document.getElementById('nSteps').value) || 3;
+        result = await runNStepControl(selectedAlgo, nStep, alpha, epsilon, episodes, gamma, isNaN(stepReward) ? -0.04 : stepReward);
+    } else if (isApprox) {
+        const alpha = parseFloat(document.getElementById('alpha').value) || 0.1;
+        const epsilon = parseFloat(document.getElementById('epsilon').value) || 0.2;
+        const episodes = parseInt(document.getElementById('episodes').value) || 1000;
+        const featureType = document.getElementById('featureType') ? document.getElementById('featureType').value : 'coords';
+        if (selectedAlgo === 'semi_grad_td') {
+            result = await runApproximatePrediction(selectedAlgo, alpha, episodes, gamma, isNaN(stepReward) ? -0.04 : stepReward, featureType);
+        } else {
+            result = await runApproximateControl(selectedAlgo, alpha, epsilon, episodes, gamma, isNaN(stepReward) ? -0.04 : stepReward, featureType);
+        }
+    } else if (isPG) {
+        const alpha = parseFloat(document.getElementById('alpha').value) || 0.01;
+        const alphaCritic = document.getElementById('alphaCritic') ? parseFloat(document.getElementById('alphaCritic').value) : 0.1;
+        const episodes = parseInt(document.getElementById('episodes').value) || 1000;
+        if (selectedAlgo === 'reinforce') {
+            result = await runREINFORCE(alpha, episodes, gamma, isNaN(stepReward) ? -0.04 : stepReward);
+        } else if (selectedAlgo === 'reinforce_base') {
+            result = await runREINFORCEBaseline(alpha, alphaCritic, episodes, gamma, isNaN(stepReward) ? -0.04 : stepReward);
+        } else if (selectedAlgo === 'actor_critic') {
+            result = await runActorCritic(alpha, alphaCritic, episodes, gamma, isNaN(stepReward) ? -0.04 : stepReward);
+        }
+    }
+
+    if (!result) {
+        console.error("No result returned for algo:", selectedAlgo);
+        isRunning = false;
+        document.getElementById('btnRun').disabled = false;
+        return;
     }
     
     currentV = result.V;
@@ -1736,7 +1777,7 @@ function renderQTable() {
 
 // ── Hierarchical RL: Options Framework (Chapter 17) ──
 async function runOptionsFramework(alpha, epsilon, episodes, gamma, stepReward) {
-    if (!startCell) return { V: currentV, policy: currentPolicy };
+    if (!startCell) { alert('Vui lòng chọn 1 ô Start (S) trên lưới trước khi chạy!'); return { V: currentV, policy: currentPolicy }; }
     logLines = []; logLines.push({ type: 'header', text: '═══ SMDP Q-Learning (Options) ═══' }); renderLog();
     initChart();
     
