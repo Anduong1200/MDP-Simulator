@@ -9,16 +9,25 @@ const ARROWS = { U: '↑', D: '↓', L: '←', R: '→' };
 
 // ── State ──
 let gridRows = 0, gridCols = 0;
-let cells = [];          // 2D: { type:'empty'|'blocked'|'terminal', reward:0 }
+let cells = [];          // 2D: { type:'empty'|'blocked'|'terminal'|'start', reward:0 }
+let startCell = null;    // {r, c}
 let selectedCell = null; // { r, c }
 let selectedAlgo = 'vi';
 let piInitMode = 'uniform';
 let uniformDirection = 'U';
-let initPolicy = [];     // 2D: action string ('U','D','L','R') or null
+let initPolicy = [];     // 2D: action string
 let currentV = [];       // 2D: float
 let currentPolicy = [];  // 2D: action string
 let displayMode = 'both';
 let isRunning = false;
+let isStochastic = false;
+
+// ── Simulation State ──
+let simInterval = null;
+let agentPos = null;
+let simG = 0;
+let simGammaPower = 1;
+let simStepCount = 0;
 
 // ── Grid Creation ──
 function createGrid() {
@@ -50,7 +59,8 @@ function createGrid() {
     currentV = [];
     currentPolicy = [];
     selectedCell = null;
-    isRunning = false;
+    startCell = null;
+    resetSimulation();
 
     // Show panels
     document.getElementById('cellEditorCard').style.display = '';
@@ -59,8 +69,9 @@ function createGrid() {
     document.getElementById('gridPlaceholder').style.display = 'none';
     document.getElementById('gridWrapper').style.display = '';
     document.getElementById('gridLabel').textContent = `${m} × ${n} Grid`;
-    document.getElementById('btnStep').style.display = 'none';
-    document.getElementById('btnReset').style.display = 'none';
+    
+    // Default show simCard
+    document.getElementById('simCard').style.display = '';
 
     renderGrid();
 }
@@ -69,6 +80,16 @@ function renderGrid() {
     const gridEl = document.getElementById('grid');
     gridEl.style.gridTemplateColumns = `repeat(${gridCols}, 80px)`;
     gridEl.innerHTML = '';
+
+    // Create Agent Marker
+    let agentEl = document.getElementById('agentMarker');
+    if (!agentEl) {
+        agentEl = document.createElement('div');
+        agentEl.id = 'agentMarker';
+        agentEl.className = 'agent-marker';
+        agentEl.style.display = 'none';
+        gridEl.appendChild(agentEl);
+    }
 
     for (let r = 0; r < gridRows; r++) {
         for (let c = 0; c < gridCols; c++) {
@@ -85,6 +106,8 @@ function renderGrid() {
             } else if (cell.type === 'terminal') {
                 el.classList.add('terminal');
                 el.classList.add(cell.reward >= 0 ? 'positive' : 'negative');
+            } else if (cell.type === 'start') {
+                el.classList.add('start');
             } else {
                 el.classList.add('empty');
             }
@@ -128,14 +151,14 @@ function renderGrid() {
                     el.appendChild(arrSpan);
                 }
 
-                // Show init policy arrow if PI manual mode and no result yet
-                if (!hasV && !hasP && selectedAlgo === 'pi' && piInitMode === 'manual') {
+                // Show init policy arrow if PI/PE manual mode and no result yet
+                if (!hasV && !hasP && (selectedAlgo === 'pi' || selectedAlgo === 'pe') && piInitMode === 'manual') {
                     const initSpan = document.createElement('span');
                     initSpan.className = 'cell-init-arrow';
                     initSpan.textContent = ARROWS[initPolicy[r][c]] || '?';
                     el.appendChild(initSpan);
                 }
-                if (!hasV && !hasP && selectedAlgo === 'pi' && piInitMode === 'uniform') {
+                if (!hasV && !hasP && (selectedAlgo === 'pi' || selectedAlgo === 'pe') && piInitMode === 'uniform') {
                     const initSpan = document.createElement('span');
                     initSpan.className = 'cell-init-arrow';
                     initSpan.textContent = ARROWS[uniformDirection];
@@ -143,10 +166,16 @@ function renderGrid() {
                 }
             }
 
+            // Events
             el.addEventListener('click', () => onCellClick(r, c));
+            el.addEventListener('mouseenter', (e) => onCellHover(r, c, e));
+            el.addEventListener('mouseleave', hideTooltip);
+
             gridEl.appendChild(el);
         }
     }
+    
+    updateAgentPosition();
 }
 
 // ── Cell Interaction ──
@@ -169,19 +198,32 @@ function onCellClick(r, c) {
 function setCellType(type) {
     if (!selectedCell) { alert('Hãy click chọn 1 ô trên grid trước!'); return; }
     const { r, c } = selectedCell;
-    if (type === 'terminal') {
+    
+    // Clear old start cell if setting new one
+    if (type === 'start') {
+        if (startCell) {
+            cells[startCell.r][startCell.c] = { type: 'empty', reward: 0 };
+        }
+        startCell = { r, c };
+        cells[r][c] = { type: 'start', reward: 0 };
+        document.getElementById('terminalRewardGroup').style.display = 'none';
+    } else if (type === 'terminal') {
+        if (startCell && startCell.r === r && startCell.c === c) startCell = null;
         const reward = parseFloat(document.getElementById('terminalReward').value) || 1;
         cells[r][c] = { type: 'terminal', reward };
         document.getElementById('terminalRewardGroup').style.display = '';
         document.getElementById('terminalReward').value = reward;
     } else {
+        if (startCell && startCell.r === r && startCell.c === c) startCell = null;
         cells[r][c] = { type, reward: 0 };
         document.getElementById('terminalRewardGroup').style.display = 'none';
     }
+    
     document.getElementById('selectedCellText').textContent =
         `(${r}, ${c}) — ${cells[r][c].type}${cells[r][c].type === 'terminal' ? ` [${cells[r][c].reward}]` : ''}`;
     currentV = [];
     currentPolicy = [];
+    resetSimulation();
     renderGrid();
 }
 
@@ -192,15 +234,76 @@ function applyTerminalReward() {
     cells[r][c].reward = parseFloat(document.getElementById('terminalReward').value) || 0;
     currentV = [];
     currentPolicy = [];
+    resetSimulation();
     renderGrid();
 }
+
+// ── Tooltip Q-Value ──
+function onCellHover(r, c, event) {
+    if (currentV.length === 0 || cells[r][c].type === 'blocked' || cells[r][c].type === 'terminal') {
+        hideTooltip();
+        return;
+    }
+    
+    const stepReward = parseFloat(document.getElementById('stepReward').value) || -0.04;
+    const gamma = parseFloat(document.getElementById('gamma').value) || 0.9;
+    
+    const qValues = {};
+    let bestA = null, bestVal = -Infinity;
+    
+    for (const a of ACTION_KEYS) {
+        let q = 0;
+        const probs = getNextStateProbabilities(r, c, a);
+        for (const p of probs) {
+            const reward = getReward(r, c, a, p.nr, p.nc, stepReward);
+            q += p.prob * (reward + gamma * currentV[p.nr][p.nc]);
+        }
+        qValues[a] = q;
+        if (q > bestVal) { bestVal = q; bestA = a; }
+    }
+    
+    const tooltip = document.getElementById('qTooltip');
+    const elU = document.getElementById('qValU');
+    const elD = document.getElementById('qValD');
+    const elL = document.getElementById('qValL');
+    const elR = document.getElementById('qValR');
+    
+    elU.textContent = qValues['U'].toFixed(2);
+    elD.textContent = qValues['D'].toFixed(2);
+    elL.textContent = qValues['L'].toFixed(2);
+    elR.textContent = qValues['R'].toFixed(2);
+    
+    [elU, elD, elL, elR].forEach(el => el.classList.remove('best-action'));
+    if (bestA === 'U') elU.classList.add('best-action');
+    if (bestA === 'D') elD.classList.add('best-action');
+    if (bestA === 'L') elL.classList.add('best-action');
+    if (bestA === 'R') elR.classList.add('best-action');
+    
+    tooltip.style.display = 'grid';
+    // Position near cursor
+    tooltip.style.left = (event.pageX + 15) + 'px';
+    tooltip.style.top = (event.pageY + 15) + 'px';
+}
+
+function hideTooltip() {
+    document.getElementById('qTooltip').style.display = 'none';
+}
+
+document.addEventListener('mousemove', (e) => {
+    const tooltip = document.getElementById('qTooltip');
+    if (tooltip.style.display !== 'none') {
+        tooltip.style.left = (e.pageX + 15) + 'px';
+        tooltip.style.top = (e.pageY + 15) + 'px';
+    }
+});
 
 // ── Algorithm Selection ──
 function selectAlgo(algo) {
     selectedAlgo = algo;
     document.getElementById('btnVI').classList.toggle('active', algo === 'vi');
     document.getElementById('btnPI').classList.toggle('active', algo === 'pi');
-    document.getElementById('piInitSection').style.display = algo === 'pi' ? '' : 'none';
+    document.getElementById('btnPE').classList.toggle('active', algo === 'pe');
+    document.getElementById('piInitSection').style.display = (algo === 'pi' || algo === 'pe') ? '' : 'none';
     currentV = [];
     currentPolicy = [];
     renderGrid();
@@ -219,10 +322,9 @@ function setUniformDir(dir) {
     document.querySelectorAll('#uniformDirGroup .btn-dir').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.dir === dir);
     });
-    // Update all initPolicy
     for (let r = 0; r < gridRows; r++) {
         for (let c = 0; c < gridCols; c++) {
-            if (cells[r][c].type === 'empty') {
+            if (cells[r][c].type === 'empty' || cells[r][c].type === 'start') {
                 initPolicy[r][c] = dir;
             }
         }
@@ -233,12 +335,11 @@ function setUniformDir(dir) {
 function setManualDir(dir) {
     if (!selectedCell) { alert('Click chọn 1 ô trên grid trước!'); return; }
     const { r, c } = selectedCell;
-    if (cells[r][c].type !== 'empty') { alert('Chỉ set hướng cho ô Empty!'); return; }
+    if (cells[r][c].type === 'blocked' || cells[r][c].type === 'terminal') { alert('Không set hướng cho ô bị lấp hoặc terminal!'); return; }
     initPolicy[r][c] = dir;
     renderGrid();
 }
 
-// ── Display Toggle ──
 function toggleDisplay(mode) {
     displayMode = mode;
     document.getElementById('btnShowValues').classList.toggle('active', mode === 'values');
@@ -252,12 +353,47 @@ function inBounds(r, c) {
     return r >= 0 && r < gridRows && c >= 0 && c < gridCols;
 }
 
-function getNextState(r, c, action) {
-    const [dr, dc] = ACTIONS[action];
+function getActualNextState(r, c, dr, dc) {
     const nr = r + dr, nc = c + dc;
-    if (!inBounds(nr, nc)) return [r, c];
-    if (cells[nr][nc].type === 'blocked') return [r, c];
-    return [nr, nc];
+    if (!inBounds(nr, nc)) return {nr: r, nc: c};
+    if (cells[nr][nc].type === 'blocked') return {nr: r, nc: c};
+    return {nr, nc};
+}
+
+function getNextStateProbabilities(r, c, action) {
+    // Return array of {nr, nc, prob}
+    const [dr, dc] = ACTIONS[action];
+    
+    if (!isStochastic) {
+        const {nr, nc} = getActualNextState(r, c, dr, dc);
+        return [{nr, nc, prob: 1.0}];
+    }
+    
+    // Stochastic: 80% intended, 10% left, 10% right
+    let leftAction, rightAction;
+    if (action === 'U') { leftAction = 'L'; rightAction = 'R'; }
+    else if (action === 'D') { leftAction = 'R'; rightAction = 'L'; }
+    else if (action === 'L') { leftAction = 'D'; rightAction = 'U'; }
+    else if (action === 'R') { leftAction = 'U'; rightAction = 'D'; }
+    
+    const [ldr, ldc] = ACTIONS[leftAction];
+    const [rdr, rdc] = ACTIONS[rightAction];
+    
+    const outcomes = [
+        {dr: dr, dc: dc, p: 0.8},
+        {dr: ldr, dc: ldc, p: 0.1},
+        {dr: rdr, dc: rdc, p: 0.1}
+    ];
+    
+    const map = {};
+    for (const out of outcomes) {
+        const {nr, nc} = getActualNextState(r, c, out.dr, out.dc);
+        const key = `${nr},${nc}`;
+        if (!map[key]) map[key] = {nr, nc, prob: 0};
+        map[key].prob += out.p;
+    }
+    
+    return Object.values(map);
 }
 
 function getReward(r, c, action, nr, nc, stepReward) {
@@ -265,35 +401,17 @@ function getReward(r, c, action, nr, nc, stepReward) {
     return stepReward;
 }
 
-function getTerminals() {
-    const t = {};
-    for (let r = 0; r < gridRows; r++) {
-        for (let c = 0; c < gridCols; c++) {
-            if (cells[r][c].type === 'terminal') {
-                t[`${r},${c}`] = cells[r][c].reward;
-            }
-        }
-    }
-    return t;
-}
-
-function isTerminal(r, c) {
-    return cells[r][c].type === 'terminal';
-}
-
-function isBlocked(r, c) {
-    return cells[r][c].type === 'blocked';
-}
+function isTerminal(r, c) { return cells[r][c].type === 'terminal'; }
+function isBlocked(r, c) { return cells[r][c].type === 'blocked'; }
 
 // ── Value Iteration ──
 function runValueIteration(gamma, theta, stepReward) {
     const V = Array.from({ length: gridRows }, () => Array(gridCols).fill(0));
-    const terminals = getTerminals();
     let iterations = 0;
     let finalDelta = Infinity;
 
     const logLines = [];
-    logLines.push({ type: 'header', text: '═══ Value Iteration ═══' });
+    logLines.push({ type: 'header', text: `═══ Value Iteration (${isStochastic?'Stochastic':'Deterministic'}) ═══` });
 
     while (iterations < 10000) {
         iterations++;
@@ -308,10 +426,13 @@ function runValueIteration(gamma, theta, stepReward) {
                 }
                 let bestVal = -Infinity;
                 for (const a of ACTION_KEYS) {
-                    const [nr, nc] = getNextState(r, c, a);
-                    const reward = getReward(r, c, a, nr, nc, stepReward);
-                    const val = reward + gamma * V[nr][nc];
-                    bestVal = Math.max(bestVal, val);
+                    const probs = getNextStateProbabilities(r, c, a);
+                    let expectedVal = 0;
+                    for (const p of probs) {
+                        const reward = getReward(r, c, a, p.nr, p.nc, stepReward);
+                        expectedVal += p.prob * (reward + gamma * V[p.nr][p.nc]);
+                    }
+                    bestVal = Math.max(bestVal, expectedVal);
                 }
                 newV[r][c] = bestVal;
                 delta = Math.max(delta, Math.abs(newV[r][c] - V[r][c]));
@@ -323,21 +444,7 @@ function runValueIteration(gamma, theta, stepReward) {
     }
 
     // Extract policy
-    const policy = Array.from({ length: gridRows }, () => Array(gridCols).fill(''));
-    for (let r = 0; r < gridRows; r++) {
-        for (let c = 0; c < gridCols; c++) {
-            if (isBlocked(r, c)) { policy[r][c] = '#'; continue; }
-            if (isTerminal(r, c)) { policy[r][c] = 'T'; continue; }
-            let bestA = 'U', bestVal = -Infinity;
-            for (const a of ACTION_KEYS) {
-                const [nr, nc] = getNextState(r, c, a);
-                const reward = getReward(r, c, a, nr, nc, stepReward);
-                const val = reward + gamma * V[nr][nc];
-                if (val > bestVal) { bestVal = val; bestA = a; }
-            }
-            policy[r][c] = bestA;
-        }
-    }
+    const policy = extractPolicy(V, gamma, stepReward);
 
     logLines.push({ type: 'entry', text: `Hội tụ sau ${iterations} vòng lặp` });
     logLines.push({ type: 'entry', text: `Delta cuối: ${finalDelta.toFixed(8)}` });
@@ -345,9 +452,30 @@ function runValueIteration(gamma, theta, stepReward) {
     return { V, policy, logLines };
 }
 
+function extractPolicy(V, gamma, stepReward) {
+    const policy = Array.from({ length: gridRows }, () => Array(gridCols).fill(''));
+    for (let r = 0; r < gridRows; r++) {
+        for (let c = 0; c < gridCols; c++) {
+            if (isBlocked(r, c)) { policy[r][c] = '#'; continue; }
+            if (isTerminal(r, c)) { policy[r][c] = 'T'; continue; }
+            let bestA = 'U', bestVal = -Infinity;
+            for (const a of ACTION_KEYS) {
+                const probs = getNextStateProbabilities(r, c, a);
+                let expectedVal = 0;
+                for (const p of probs) {
+                    const reward = getReward(r, c, a, p.nr, p.nc, stepReward);
+                    expectedVal += p.prob * (reward + gamma * V[p.nr][p.nc]);
+                }
+                if (expectedVal > bestVal) { bestVal = expectedVal; bestA = a; }
+            }
+            policy[r][c] = bestA;
+        }
+    }
+    return policy;
+}
+
 // ── Policy Iteration ──
-function runPolicyIteration(gamma, theta, stepReward) {
-    // Build initial policy
+function getInitialPolicy() {
     const policy = Array.from({ length: gridRows }, () => Array(gridCols).fill('U'));
     for (let r = 0; r < gridRows; r++) {
         for (let c = 0; c < gridCols; c++) {
@@ -362,21 +490,40 @@ function runPolicyIteration(gamma, theta, stepReward) {
             }
         }
     }
+    return policy;
+}
 
-    const logLines = [];
-    logLines.push({ type: 'header', text: '═══ Policy Iteration ═══' });
-
-    // Show init policy
-    logLines.push({ type: 'entry', text: 'Policy ban đầu:' });
-    for (let r = 0; r < gridRows; r++) {
-        let row = '  ';
-        for (let c = 0; c < gridCols; c++) {
-            if (isBlocked(r, c)) row += ' # ';
-            else if (isTerminal(r, c)) row += ' T ';
-            else row += ' ' + (ARROWS[policy[r][c]] || '?') + ' ';
+function evaluatePolicyFixed(policy, V, gamma, theta, stepReward) {
+    let evalSweeps = 0;
+    while (true) {
+        evalSweeps++;
+        let delta = 0;
+        const newV = V.map(row => [...row]);
+        for (let r = 0; r < gridRows; r++) {
+            for (let c = 0; c < gridCols; c++) {
+                if (isBlocked(r, c) || isTerminal(r, c)) { newV[r][c] = 0; continue; }
+                const a = policy[r][c];
+                if (!a || a === '#' || a === 'T') continue;
+                
+                const probs = getNextStateProbabilities(r, c, a);
+                let expectedVal = 0;
+                for (const p of probs) {
+                    const reward = getReward(r, c, a, p.nr, p.nc, stepReward);
+                    expectedVal += p.prob * (reward + gamma * V[p.nr][p.nc]);
+                }
+                newV[r][c] = expectedVal;
+                delta = Math.max(delta, Math.abs(newV[r][c] - V[r][c]));
+            }
         }
-        logLines.push({ type: 'entry', text: row });
+        for (let r = 0; r < gridRows; r++) V[r] = newV[r];
+        if (delta < theta) return evalSweeps;
     }
+}
+
+function runPolicyIteration(gamma, theta, stepReward) {
+    const policy = getInitialPolicy();
+    const logLines = [];
+    logLines.push({ type: 'header', text: `═══ Policy Iteration (${isStochastic?'Stochastic':'Deterministic'}) ═══` });
 
     let V = Array.from({ length: gridRows }, () => Array(gridCols).fill(0));
     let iterations = 0;
@@ -386,44 +533,10 @@ function runPolicyIteration(gamma, theta, stepReward) {
         logLines.push({ type: 'iteration', text: `── Vòng lặp ${iterations} ──` });
 
         // Policy Evaluation
-        logLines.push({ type: 'entry', text: '  Bước 1: Policy Evaluation' });
-        V = Array.from({ length: gridRows }, () => Array(gridCols).fill(0));
-        let evalSweeps = 0;
-        while (true) {
-            evalSweeps++;
-            let delta = 0;
-            const newV = V.map(row => [...row]);
-            for (let r = 0; r < gridRows; r++) {
-                for (let c = 0; c < gridCols; c++) {
-                    if (isBlocked(r, c) || isTerminal(r, c)) { newV[r][c] = 0; continue; }
-                    const a = policy[r][c];
-                    if (!a || a === '#' || a === 'T') continue;
-                    const [nr, nc] = getNextState(r, c, a);
-                    const reward = getReward(r, c, a, nr, nc, stepReward);
-                    newV[r][c] = reward + gamma * V[nr][nc];
-                    delta = Math.max(delta, Math.abs(newV[r][c] - V[r][c]));
-                }
-            }
-            for (let r = 0; r < gridRows; r++) V[r] = newV[r];
-            if (delta < theta) {
-                logLines.push({ type: 'sweep', text: `    Hội tụ sau ${evalSweeps} sweep (Δ=${delta.toFixed(8)})` });
-                break;
-            }
-        }
-
-        // Show V
-        logLines.push({ type: 'entry', text: '    V(s) sau Evaluation:' });
-        for (let r = 0; r < gridRows; r++) {
-            let row = '    ';
-            for (let c = 0; c < gridCols; c++) {
-                if (isBlocked(r, c)) row += '#####  ';
-                else row += V[r][c].toFixed(2).padStart(5) + '  ';
-            }
-            logLines.push({ type: 'entry', text: row });
-        }
+        const sweeps = evaluatePolicyFixed(policy, V, gamma, theta, stepReward);
+        logLines.push({ type: 'sweep', text: `    Hội tụ sau ${sweeps} sweep` });
 
         // Policy Improvement
-        logLines.push({ type: 'entry', text: '  Bước 2: Policy Improvement' });
         let stable = true;
         const changes = [];
 
@@ -433,10 +546,13 @@ function runPolicyIteration(gamma, theta, stepReward) {
                 const oldA = policy[r][c];
                 let bestA = 'U', bestVal = -Infinity;
                 for (const a of ACTION_KEYS) {
-                    const [nr, nc] = getNextState(r, c, a);
-                    const reward = getReward(r, c, a, nr, nc, stepReward);
-                    const val = reward + gamma * V[nr][nc];
-                    if (val > bestVal) { bestVal = val; bestA = a; }
+                    const probs = getNextStateProbabilities(r, c, a);
+                    let expectedVal = 0;
+                    for (const p of probs) {
+                        const reward = getReward(r, c, a, p.nr, p.nc, stepReward);
+                        expectedVal += p.prob * (reward + gamma * V[p.nr][p.nc]);
+                    }
+                    if (expectedVal > bestVal) { bestVal = expectedVal; bestA = a; }
                 }
                 if (oldA !== bestA) {
                     stable = false;
@@ -447,42 +563,36 @@ function runPolicyIteration(gamma, theta, stepReward) {
         }
 
         if (changes.length > 0) {
-            logLines.push({ type: 'entry', text: `    ${changes.length} ô thay đổi:` });
-            for (const ch of changes) {
-                logLines.push({
-                    type: 'change',
-                    text: `      (${ch.r},${ch.c}): ${ARROWS[ch.from]} → ${ARROWS[ch.to]}`
-                });
-            }
-        } else {
-            logLines.push({ type: 'stable', text: '    Không có ô nào thay đổi → Policy ổn định!' });
-        }
-
-        // Show policy
-        logLines.push({ type: 'entry', text: '    Policy sau Improvement:' });
-        for (let r = 0; r < gridRows; r++) {
-            let row = '    ';
-            for (let c = 0; c < gridCols; c++) {
-                if (isBlocked(r, c)) row += ' # ';
-                else if (isTerminal(r, c)) row += ' T ';
-                else row += ' ' + (ARROWS[policy[r][c]] || '?') + ' ';
-            }
-            logLines.push({ type: 'entry', text: row });
+            logLines.push({ type: 'entry', text: `    ${changes.length} ô thay đổi` });
         }
 
         if (stable) {
             logLines.push({ type: 'stable', text: `✓ Policy STABLE! Kết thúc sau ${iterations} vòng.` });
             break;
-        } else {
-            logLines.push({ type: 'entry', text: '  → Chưa ổn định, tiếp tục...' });
         }
     }
 
     return { V, policy, logLines, iterations };
 }
 
-// ── Run ──
+// ── Policy Evaluation Standalone ──
+function runPolicyEvaluationStandalone(gamma, theta, stepReward) {
+    const policy = getInitialPolicy();
+    const logLines = [];
+    logLines.push({ type: 'header', text: `═══ Evaluate Current Policy (${isStochastic?'Stochastic':'Deterministic'}) ═══` });
+    logLines.push({ type: 'entry', text: `Chỉ tính V(s) cho Policy hiện hành, KHÔNG tối ưu.` });
+
+    let V = Array.from({ length: gridRows }, () => Array(gridCols).fill(0));
+    const sweeps = evaluatePolicyFixed(policy, V, gamma, theta, stepReward);
+    
+    logLines.push({ type: 'sweep', text: `Hội tụ sau ${sweeps} sweep` });
+    return { V, policy, logLines };
+}
+
+// ── Run Setup ──
 function runAlgorithm() {
+    isStochastic = document.getElementById('isStochastic').checked;
+    
     // Validate: at least 1 terminal
     let hasTerminal = false;
     for (let r = 0; r < gridRows; r++) {
@@ -502,8 +612,10 @@ function runAlgorithm() {
     let result;
     if (selectedAlgo === 'vi') {
         result = runValueIteration(gamma, theta, isNaN(stepReward) ? -0.04 : stepReward);
-    } else {
+    } else if (selectedAlgo === 'pi') {
         result = runPolicyIteration(gamma, theta, isNaN(stepReward) ? -0.04 : stepReward);
+    } else {
+        result = runPolicyEvaluationStandalone(gamma, theta, isNaN(stepReward) ? -0.04 : stepReward);
     }
 
     currentV = result.V;
@@ -514,18 +626,8 @@ function runAlgorithm() {
     document.querySelector('.main-layout').classList.remove('no-log');
     renderLog(result.logLines);
     renderGrid();
-
-    // Show reset
-    document.getElementById('btnReset').style.display = '';
-}
-
-function resetAlgorithm() {
-    currentV = [];
-    currentPolicy = [];
-    isRunning = false;
-    document.getElementById('btnReset').style.display = 'none';
-    document.getElementById('btnStep').style.display = 'none';
-    renderGrid();
+    
+    resetSimulation();
 }
 
 // ── Log ──
@@ -550,7 +652,109 @@ function clearLog() {
     document.getElementById('logContent').innerHTML = '';
 }
 
-// ── Step-through (future enhancement) ──
-function stepAlgorithm() {
-    // placeholder for step-by-step mode
+// ── Agent Simulation ──
+function updateAgentPosition() {
+    const agentEl = document.getElementById('agentMarker');
+    if (!agentEl) return;
+    
+    if (!agentPos) {
+        agentEl.style.display = 'none';
+        return;
+    }
+    
+    agentEl.style.display = 'block';
+    // Calculate position based on grid
+    const cellEl = document.getElementById(`cell-${agentPos.r}-${agentPos.c}`);
+    if (cellEl) {
+        // Grid có padding 12px, cell 80px, gap 4px
+        // Khoảng cách từ mép grid = padding + index * (cell + gap) + cell/2 - agent/2
+        // = 12 + index * 84 + 40 - 12 = 40 + index * 84
+        const left = 40 + agentPos.c * 84;
+        const top = 40 + agentPos.r * 84; 
+        
+        agentEl.style.left = `${left}px`;
+        agentEl.style.top = `${top}px`;
+    }
+}
+
+function resetSimulation() {
+    if (simInterval) clearInterval(simInterval);
+    simInterval = null;
+    agentPos = startCell ? { r: startCell.r, c: startCell.c } : null;
+    simG = 0;
+    simGammaPower = 1;
+    simStepCount = 0;
+    document.getElementById('simReturn').textContent = '0.00';
+    updateAgentPosition();
+}
+
+function stepSimulation() {
+    if (currentPolicy.length === 0) {
+        alert('Cần chạy thuật toán để có Policy trước khi mô phỏng!');
+        return;
+    }
+    if (!startCell) {
+        alert('Cần đặt Start State để mô phỏng Agent!');
+        return;
+    }
+    if (!agentPos) {
+        resetSimulation();
+    }
+    
+    const {r, c} = agentPos;
+    if (isTerminal(r, c)) {
+        if (simInterval) clearInterval(simInterval);
+        simInterval = null;
+        return; // done
+    }
+    
+    const action = currentPolicy[r][c];
+    if (!action || action === '#' || action === 'T') return;
+    
+    // Get next state based on probabilities
+    const probs = getNextStateProbabilities(r, c, action);
+    const rand = Math.random();
+    let cumulative = 0;
+    let nextR = r, nextC = c;
+    
+    for (const p of probs) {
+        cumulative += p.prob;
+        if (rand <= cumulative) {
+            nextR = p.nr;
+            nextC = p.nc;
+            break;
+        }
+    }
+    
+    // Calculate reward and Return
+    const stepReward = parseFloat(document.getElementById('stepReward').value) || -0.04;
+    const gamma = parseFloat(document.getElementById('gamma').value) || 0.9;
+    
+    const reward = getReward(r, c, action, nextR, nextC, stepReward);
+    simG += simGammaPower * reward;
+    simGammaPower *= gamma;
+    simStepCount++;
+    
+    document.getElementById('simReturn').textContent = simG.toFixed(4);
+    
+    agentPos = { r: nextR, c: nextC };
+    updateAgentPosition();
+    
+    if (isTerminal(nextR, nextC) && simInterval) {
+        clearInterval(simInterval);
+        simInterval = null;
+    }
+}
+
+function playSimulation() {
+    if (currentPolicy.length === 0) {
+        alert('Cần chạy thuật toán để có Policy trước khi mô phỏng!');
+        return;
+    }
+    if (!startCell) {
+        alert('Cần đặt Start State để mô phỏng Agent!');
+        return;
+    }
+    resetSimulation();
+    simInterval = setInterval(stepSimulation, 500); // 500ms per step
 }

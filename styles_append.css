@@ -1,0 +1,73 @@
+/* Appended styles for Start State, Agent, and Q-Value Tooltip */
+
+/* Start State */
+.start-preview { background: var(--blue); border: 1px solid var(--text-muted); }
+.start-legend { background: var(--blue-bg); border: 1px solid var(--blue); }
+
+.grid-cell.start {
+    border-color: rgba(96, 165, 250, 0.4);
+    background: var(--blue-bg);
+}
+
+/* Agent Marker */
+.agent-marker {
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    background: radial-gradient(circle at 30% 30%, #fff, #3b82f6);
+    border-radius: 50%;
+    box-shadow: 0 4px 10px rgba(59, 130, 246, 0.5);
+    z-index: 10;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    pointer-events: none; /* Let clicks pass through to cell */
+}
+
+/* Q-Value Tooltip */
+.q-tooltip {
+    position: absolute;
+    background: rgba(15, 23, 42, 0.95);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    padding: 8px;
+    display: grid;
+    grid-template-columns: 40px 40px 40px;
+    grid-template-rows: 25px 25px 25px;
+    gap: 4px;
+    align-items: center;
+    justify-items: center;
+    z-index: 1000;
+    pointer-events: none;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    backdrop-filter: blur(4px);
+    transition: opacity 0.1s;
+}
+
+.q-val {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+    padding: 2px 4px;
+    color: var(--text-primary);
+    width: 100%;
+    text-align: center;
+}
+
+.q-top { grid-column: 2; grid-row: 1; }
+.q-left { grid-column: 1; grid-row: 2; }
+.q-right { grid-column: 3; grid-row: 2; }
+.q-bottom { grid-column: 2; grid-row: 3; }
+
+.q-center {
+    grid-column: 2;
+    grid-row: 2;
+    font-size: 0.6rem;
+    color: var(--text-muted);
+}
+
+.q-val.best-action {
+    background: rgba(52, 211, 153, 0.2);
+    color: var(--green);
+    font-weight: bold;
+    border: 1px solid rgba(52, 211, 153, 0.4);
+}

@@ -64,6 +64,9 @@
                         <button class="btn btn-cell btn-terminal" onclick="setCellType('terminal')" title="Terminal">
                             <span class="cell-preview terminal-preview"></span> Terminal
                         </button>
+                        <button class="btn btn-cell btn-start" onclick="setCellType('start')" title="Start State">
+                            <span class="cell-preview start-preview"></span> Start
+                        </button>
                     </div>
                     <div class="terminal-reward-group" id="terminalRewardGroup" style="display:none;">
                         <label for="terminalReward">Terminal Reward:</label>
@@ -94,6 +97,13 @@
                         <label for="stepReward">Step Reward (cost mỗi bước)</label>
                         <input type="number" id="stepReward" value="-0.04" step="0.01">
                     </div>
+                    <div class="input-group" style="margin-top: 10px;">
+                        <label class="checkbox-label" style="display:flex; align-items:center; gap:8px; cursor:pointer; color:var(--text-primary); text-transform:none;">
+                            <input type="checkbox" id="isStochastic" style="width:16px; height:16px;">
+                            <span>Môi trường Stochastic (20% trượt)</span>
+                        </label>
+                        <p style="font-size:0.7rem; color:var(--text-muted); margin-top:4px;">Nếu bật: Đi thẳng 80%, trượt sang 2 bên mỗi bên 10%.</p>
+                    </div>
                 </section>
 
                 <!-- Algorithm -->
@@ -102,9 +112,10 @@
                         <span class="card-icon">▶</span>
                         Algorithm
                     </h2>
-                    <div class="algo-selector">
+                    <div class="algo-selector" style="flex-wrap:wrap;">
                         <button class="btn btn-algo active" id="btnVI" onclick="selectAlgo('vi')">Value Iteration</button>
                         <button class="btn btn-algo" id="btnPI" onclick="selectAlgo('pi')">Policy Iteration</button>
+                        <button class="btn btn-algo" id="btnPE" onclick="selectAlgo('pe')" style="flex-basis: 100%; margin-top: 4px;">Evaluate Policy</button>
                     </div>
 
                     <!-- PI Initial Policy -->
@@ -146,14 +157,26 @@
 
                     <div class="run-controls">
                         <button class="btn btn-run" id="btnRun" onclick="runAlgorithm()">
-                            <span class="run-icon">▶</span> Chạy
+                            <span class="run-icon">▶</span> Chạy Thuật Toán
                         </button>
-                        <button class="btn btn-step" id="btnStep" onclick="stepAlgorithm()" style="display:none;">
-                            <span>⏭</span> Bước tiếp
-                        </button>
-                        <button class="btn btn-reset" id="btnReset" onclick="resetAlgorithm()" style="display:none;">
-                            <span>↺</span> Reset
-                        </button>
+                    </div>
+                </section>
+
+                <!-- Simulation -->
+                <section class="card" id="simCard" style="display:none; border-color: var(--blue);">
+                    <h2 class="card-title" style="color: var(--blue);">
+                        <span class="card-icon">🏃</span>
+                        Agent Simulation
+                    </h2>
+                    <p class="card-desc">Chạy mô phỏng để tính Return \( G_t \)</p>
+                    <div class="sim-stats" style="margin-bottom: 10px; padding: 10px; background: rgba(96,165,250,0.1); border-radius: 6px;">
+                        <div style="font-size: 0.8rem; color: var(--text-secondary);">Return <span style="font-family: var(--font-mono)">G₀</span></div>
+                        <div id="simReturn" style="font-family: var(--font-mono); font-size: 1.2rem; font-weight: bold; color: var(--blue);">0.00</div>
+                    </div>
+                    <div class="run-controls">
+                        <button class="btn btn-run" style="background: linear-gradient(135deg, #2563eb, #3b82f6);" onclick="playSimulation()">Play</button>
+                        <button class="btn btn-step" onclick="stepSimulation()">Step</button>
+                        <button class="btn btn-reset" onclick="resetSimulation()">Reset</button>
                     </div>
                 </section>
             </aside>
@@ -177,6 +200,7 @@
                     <div class="grid-legend">
                         <span class="legend-item"><span class="legend-color empty-legend"></span>Empty</span>
                         <span class="legend-item"><span class="legend-color blocked-legend"></span>Blocked</span>
+                        <span class="legend-item"><span class="legend-color start-legend"></span>Start</span>
                         <span class="legend-item"><span class="legend-color terminal-pos-legend"></span>Terminal (+)</span>
                         <span class="legend-item"><span class="legend-color terminal-neg-legend"></span>Terminal (−)</span>
                     </div>
@@ -197,6 +221,15 @@
                 </section>
             </aside>
         </main>
+    </div>
+
+    <!-- Q-Value Tooltip -->
+    <div id="qTooltip" class="q-tooltip" style="display:none;">
+        <div class="q-val q-top" id="qValU">-</div>
+        <div class="q-val q-left" id="qValL">-</div>
+        <div class="q-center">Q(s,a)</div>
+        <div class="q-val q-right" id="qValR">-</div>
+        <div class="q-val q-bottom" id="qValD">-</div>
     </div>
 
     <script src="app.js"></script>
