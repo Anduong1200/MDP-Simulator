@@ -22,6 +22,7 @@ let displayMode = 'both';
 let isRunning = false;
 let isStochastic = false;
 let slipProb = 0.2;
+let qMatrix = [];        // 2D: { U, D, L, R }
 let logLines = [];       // Lưu log toàn cục để render dần
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -44,19 +45,14 @@ function createGrid() {
     gridRows = m;
     gridCols = n;
 
-    cells = [];
     for (let r = 0; r < m; r++) {
         cells[r] = [];
+        initPolicy[r] = [];
+        qMatrix[r] = [];
         for (let c = 0; c < n; c++) {
             cells[r][c] = { type: 'empty', reward: 0 };
-        }
-    }
-
-    initPolicy = [];
-    for (let r = 0; r < m; r++) {
-        initPolicy[r] = [];
-        for (let c = 0; c < n; c++) {
             initPolicy[r][c] = 'U';
+            qMatrix[r][c] = { U: 0, D: 0, L: 0, R: 0 };
         }
     }
 
@@ -155,19 +151,10 @@ function renderGrid() {
                     el.appendChild(arrSpan);
                 }
                 if (hasV && displayMode === 'qsa') {
-                    const stepReward = parseFloat(document.getElementById('stepReward').value) || -0.04;
-                    const gamma = parseFloat(document.getElementById('gamma').value) || 0.9;
-                    const qValues = {};
-                    let bestA = null, bestVal = -Infinity;
+                    const qValues = qMatrix[r][c] || {U:0, D:0, L:0, R:0};
+                    let bestA = 'U', bestVal = -Infinity;
                     for (const a of ACTION_KEYS) {
-                        let q = 0;
-                        const probs = getNextStateProbabilities(r, c, a);
-                        for (const p of probs) {
-                            const reward = getReward(r, c, a, p.nr, p.nc, stepReward);
-                            q += p.prob * (reward + gamma * currentV[p.nr][p.nc]);
-                        }
-                        qValues[a] = q;
-                        if (q > bestVal) { bestVal = q; bestA = a; }
+                        if (qValues[a] > bestVal) { bestVal = qValues[a]; bestA = a; }
                     }
                     
                     const qContainer = document.createElement('div');
@@ -280,21 +267,11 @@ function onCellHover(r, c, event) {
         return;
     }
     
-    const stepReward = parseFloat(document.getElementById('stepReward').value) || -0.04;
-    const gamma = parseFloat(document.getElementById('gamma').value) || 0.9;
-    
-    const qValues = {};
-    let bestA = null, bestVal = -Infinity;
+    const qValues = qMatrix[r][c] || {U:0, D:0, L:0, R:0};
+    let bestA = 'U', bestVal = -Infinity;
     
     for (const a of ACTION_KEYS) {
-        let q = 0;
-        const probs = getNextStateProbabilities(r, c, a);
-        for (const p of probs) {
-            const reward = getReward(r, c, a, p.nr, p.nc, stepReward);
-            q += p.prob * (reward + gamma * currentV[p.nr][p.nc]);
-        }
-        qValues[a] = q;
-        if (q > bestVal) { bestVal = q; bestA = a; }
+        if (qValues[a] > bestVal) { bestVal = qValues[a]; bestA = a; }
     }
     
     const tooltip = document.getElementById('qTooltip');
@@ -366,7 +343,16 @@ function selectAlgo(algo) {
     document.getElementById('btnVI').classList.toggle('active', algo === 'vi');
     document.getElementById('btnPI').classList.toggle('active', algo === 'pi');
     document.getElementById('btnPE').classList.toggle('active', algo === 'pe');
+    
+    document.getElementById('btnQL').classList.toggle('active', algo === 'ql');
+    document.getElementById('btnSARSA').classList.toggle('active', algo === 'sarsa');
+    document.getElementById('btnESARSA').classList.toggle('active', algo === 'esarsa');
+    document.getElementById('btnDQL').classList.toggle('active', algo === 'dql');
+    
+    const isTD = ['ql', 'sarsa', 'esarsa', 'dql'].includes(algo);
     document.getElementById('piInitSection').style.display = (algo === 'pi' || algo === 'pe') ? '' : 'none';
+    document.getElementById('tdParams').style.display = isTD ? '' : 'none';
+    
     currentV = [];
     currentPolicy = [];
     renderGrid();
@@ -471,6 +457,24 @@ function getReward(r, c, action, nr, nc, stepReward) {
 function isTerminal(r, c) { return cells[r][c].type === 'terminal'; }
 function isBlocked(r, c) { return cells[r][c].type === 'blocked'; }
 
+// ── Tính toán Q Matrix từ V(s) (cho VI/PI/PE) ──
+function computeFullQMatrix(V, gamma, stepReward) {
+    for (let r = 0; r < gridRows; r++) {
+        for (let c = 0; c < gridCols; c++) {
+            if (isBlocked(r, c) || isTerminal(r, c)) continue;
+            for (const a of ACTION_KEYS) {
+                const probs = getNextStateProbabilities(r, c, a);
+                let q = 0;
+                for (const p of probs) {
+                    const reward = getReward(r, c, a, p.nr, p.nc, stepReward);
+                    q += p.prob * (reward + gamma * V[p.nr][p.nc]);
+                }
+                qMatrix[r][c][a] = q;
+            }
+        }
+    }
+}
+
 // ── Value Iteration ──
 async function runValueIteration(gamma, theta, stepReward) {
     const V = Array.from({ length: gridRows }, () => Array(gridCols).fill(0));
@@ -519,6 +523,7 @@ async function runValueIteration(gamma, theta, stepReward) {
 
     // Extract policy
     const policy = extractPolicy(V, gamma, stepReward);
+    computeFullQMatrix(V, gamma, stepReward);
     currentPolicy = policy;
     renderGrid();
 
@@ -670,6 +675,7 @@ async function runPolicyIteration(gamma, theta, stepReward) {
         }
     }
 
+    computeFullQMatrix(V, gamma, stepReward);
     return { V, policy };
 }
 
@@ -686,7 +692,168 @@ async function runPolicyEvaluationStandalone(gamma, theta, stepReward) {
     const sweeps = await evaluatePolicyFixed(policy, V, gamma, theta, stepReward);
     
     logLines.push({ type: 'sweep', text: `Hội tụ sau ${sweeps} sweep` });
+    computeFullQMatrix(V, gamma, stepReward);
     renderLog();
+    return { V, policy };
+}
+
+// ── TD Learning Control (Model-Free) ──
+async function runTDControl(algo, alpha, epsilon, episodes, gamma, stepReward) {
+    if (!startCell) {
+        alert('Cần đặt Start State để chạy TD Learning!');
+        return { V: currentV, policy: currentPolicy };
+    }
+
+    const algoNames = { ql: 'Q-Learning', sarsa: 'SARSA', esarsa: 'Expected SARSA', dql: 'Double Q-Learning' };
+    logLines = [];
+    logLines.push({ type: 'header', text: `═══ ${algoNames[algo]} ═══` });
+    renderLog();
+
+    // Reset Q-Matrix
+    for (let r = 0; r < gridRows; r++) {
+        for (let c = 0; c < gridCols; c++) {
+            qMatrix[r][c] = { U: 0, D: 0, L: 0, R: 0 };
+        }
+    }
+    
+    let qMatrix1, qMatrix2;
+    if (algo === 'dql') {
+        qMatrix1 = Array.from({ length: gridRows }, () => Array.from({ length: gridCols }, () => ({ U: 0, D: 0, L: 0, R: 0 })));
+        qMatrix2 = Array.from({ length: gridRows }, () => Array.from({ length: gridCols }, () => ({ U: 0, D: 0, L: 0, R: 0 })));
+    }
+
+    let V = Array.from({ length: gridRows }, () => Array(gridCols).fill(0));
+    let policy = Array.from({ length: gridRows }, () => Array(gridCols).fill('U'));
+
+    function getEpsilonGreedyAction(r, c, Q) {
+        if (Math.random() < epsilon) {
+            return ACTION_KEYS[Math.floor(Math.random() * 4)];
+        }
+        let bestA = 'U', bestQ = -Infinity;
+        for (const a of ACTION_KEYS) {
+            if (Q[r][c][a] > bestQ) { bestQ = Q[r][c][a]; bestA = a; }
+        }
+        return bestA;
+    }
+
+    for (let ep = 1; ep <= episodes; ep++) {
+        let r = startCell.r;
+        let c = startCell.c;
+        let steps = 0;
+        
+        agentPos = { r, c };
+        updateAgentPosition();
+
+        let action = (algo === 'sarsa' || algo === 'esarsa') ? getEpsilonGreedyAction(r, c, qMatrix) : null;
+
+        while (!isTerminal(r, c) && steps < 500) {
+            steps++;
+            
+            if (algo === 'ql' || algo === 'dql') {
+                // For DQL, we use combined qMatrix for exploration
+                action = getEpsilonGreedyAction(r, c, qMatrix);
+            }
+
+            // Take action
+            const probs = getNextStateProbabilities(r, c, action);
+            const rand = Math.random();
+            let cumulative = 0;
+            let nextR = r, nextC = c;
+            for (const p of probs) {
+                cumulative += p.prob;
+                if (rand <= cumulative) { nextR = p.nr; nextC = p.nc; break; }
+            }
+
+            const reward = getReward(r, c, action, nextR, nextC, stepReward);
+            
+            let nextAction;
+            if (algo === 'sarsa') {
+                nextAction = isTerminal(nextR, nextC) ? null : getEpsilonGreedyAction(nextR, nextC, qMatrix);
+            }
+
+            if (algo === 'dql') {
+                if (Math.random() < 0.5) {
+                    // Update Q1
+                    let maxA = 'U', maxQ = -Infinity;
+                    if (!isTerminal(nextR, nextC)) {
+                        for (const a of ACTION_KEYS) {
+                            if (qMatrix1[nextR][nextC][a] > maxQ) { maxQ = qMatrix1[nextR][nextC][a]; maxA = a; }
+                        }
+                    }
+                    const targetQ = isTerminal(nextR, nextC) ? 0 : qMatrix2[nextR][nextC][maxA];
+                    qMatrix1[r][c][action] += alpha * (reward + gamma * targetQ - qMatrix1[r][c][action]);
+                } else {
+                    // Update Q2
+                    let maxA = 'U', maxQ = -Infinity;
+                    if (!isTerminal(nextR, nextC)) {
+                        for (const a of ACTION_KEYS) {
+                            if (qMatrix2[nextR][nextC][a] > maxQ) { maxQ = qMatrix2[nextR][nextC][a]; maxA = a; }
+                        }
+                    }
+                    const targetQ = isTerminal(nextR, nextC) ? 0 : qMatrix1[nextR][nextC][maxA];
+                    qMatrix2[r][c][action] += alpha * (reward + gamma * targetQ - qMatrix2[r][c][action]);
+                }
+                qMatrix[r][c][action] = (qMatrix1[r][c][action] + qMatrix2[r][c][action]) / 2;
+            } else {
+                let target = 0;
+                if (!isTerminal(nextR, nextC)) {
+                    if (algo === 'ql') {
+                        target = Math.max(...Object.values(qMatrix[nextR][nextC]));
+                    } else if (algo === 'sarsa') {
+                        target = qMatrix[nextR][nextC][nextAction];
+                    } else if (algo === 'esarsa') {
+                        let maxQ = -Infinity;
+                        let greedyCount = 0;
+                        for (const a of ACTION_KEYS) {
+                            if (qMatrix[nextR][nextC][a] > maxQ) maxQ = qMatrix[nextR][nextC][a];
+                        }
+                        for (const a of ACTION_KEYS) {
+                            if (qMatrix[nextR][nextC][a] === maxQ) greedyCount++;
+                        }
+                        for (const a of ACTION_KEYS) {
+                            let prob = epsilon / 4.0;
+                            if (qMatrix[nextR][nextC][a] === maxQ) {
+                                prob += (1.0 - epsilon) / greedyCount;
+                            }
+                            target += prob * qMatrix[nextR][nextC][a];
+                        }
+                    }
+                }
+                qMatrix[r][c][action] += alpha * (reward + gamma * target - qMatrix[r][c][action]);
+            }
+
+            // Update V and Policy for display
+            let bestA = 'U', bestQ = -Infinity;
+            for (const a of ACTION_KEYS) {
+                if (qMatrix[r][c][a] > bestQ) { bestQ = qMatrix[r][c][a]; bestA = a; }
+            }
+            V[r][c] = bestQ;
+            policy[r][c] = bestA;
+
+            r = nextR;
+            c = nextC;
+            if (algo === 'sarsa') action = nextAction;
+            
+            agentPos = { r, c };
+            currentV = V;
+            currentPolicy = policy;
+            renderGrid();
+            
+            await sleep(1); // Render speed
+        }
+        
+        if (ep % Math.ceil(episodes/10) === 0 || ep === episodes) {
+            logLines.push({ type: 'entry', text: `Episode ${ep}/${episodes} completed.` });
+            renderLog();
+        }
+        
+        if (document.getElementById('qTableModal').style.display === 'flex') {
+            renderQTable();
+        }
+    }
+    
+    agentPos = null;
+    updateAgentPosition();
     return { V, policy };
 }
 
@@ -724,13 +891,19 @@ async function runAlgorithm() {
     currentPolicy = [];
     resetSimulation();
 
+    const isTD = ['ql', 'sarsa', 'esarsa', 'dql'].includes(selectedAlgo);
     let result;
     if (selectedAlgo === 'vi') {
         result = await runValueIteration(gamma, theta, isNaN(stepReward) ? -0.04 : stepReward);
     } else if (selectedAlgo === 'pi') {
         result = await runPolicyIteration(gamma, theta, isNaN(stepReward) ? -0.04 : stepReward);
-    } else {
+    } else if (selectedAlgo === 'pe') {
         result = await runPolicyEvaluationStandalone(gamma, theta, isNaN(stepReward) ? -0.04 : stepReward);
+    } else if (isTD) {
+        const alpha = parseFloat(document.getElementById('alpha').value) || 0.1;
+        const epsilon = parseFloat(document.getElementById('epsilon').value) || 0.2;
+        const episodes = parseInt(document.getElementById('episodes').value) || 1000;
+        result = await runTDControl(selectedAlgo, alpha, epsilon, episodes, gamma, isNaN(stepReward) ? -0.04 : stepReward);
     }
 
     currentV = result.V;
@@ -869,4 +1042,53 @@ function playSimulation() {
     }
     resetSimulation();
     simInterval = setInterval(stepSimulation, 500); // 500ms per step
+}
+
+// ── Q-Table Modal ──
+function openQTable() {
+    document.getElementById('qTableModal').style.display = 'flex';
+    renderQTable();
+}
+
+function closeQTable() {
+    document.getElementById('qTableModal').style.display = 'none';
+}
+
+function renderQTable() {
+    const tbody = document.getElementById('qTableContent');
+    let html = `
+        <tr>
+            <th>State (r, c)</th>
+            <th>Q(s, U) ↑</th>
+            <th>Q(s, D) ↓</th>
+            <th>Q(s, L) ←</th>
+            <th>Q(s, R) →</th>
+            <th>Max Q</th>
+            <th>Best Action</th>
+        </tr>
+    `;
+    
+    for (let r = 0; r < gridRows; r++) {
+        for (let c = 0; c < gridCols; c++) {
+            if (isBlocked(r, c) || isTerminal(r, c)) continue;
+            const q = qMatrix[r][c];
+            let bestA = 'U', maxQ = -Infinity;
+            for (const a of ACTION_KEYS) {
+                if (q[a] > maxQ) { maxQ = q[a]; bestA = a; }
+            }
+            
+            html += `
+                <tr>
+                    <td class="state-col">(${r}, ${c})</td>
+                    <td class="${bestA==='U'?'best-q':''}">${q.U.toFixed(4)}</td>
+                    <td class="${bestA==='D'?'best-q':''}">${q.D.toFixed(4)}</td>
+                    <td class="${bestA==='L'?'best-q':''}">${q.L.toFixed(4)}</td>
+                    <td class="${bestA==='R'?'best-q':''}">${q.R.toFixed(4)}</td>
+                    <td style="font-weight:bold; color:var(--text-primary);">${maxQ.toFixed(4)}</td>
+                    <td style="color:var(--accent-bright);">${ARROWS[bestA]}</td>
+                </tr>
+            `;
+        }
+    }
+    tbody.innerHTML = html;
 }

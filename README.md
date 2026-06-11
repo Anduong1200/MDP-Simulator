@@ -5,9 +5,15 @@ Một phần mềm mô phỏng trực quan các thuật toán cốt lõi của *
 ## Tính năng chính
 - **Mô phỏng Môi trường (Environment)**: Tạo Grid tùy chỉnh kích thước, đặt các vật cản (Blocked), Terminal States có thưởng/phạt, và vị trí xuất phát (Start).
 - **Môi trường Deterministic & Stochastic**: Cho phép điều chỉnh tỉ lệ trượt (Slip probability) của Agent. Mặc định Agent chọn đi thẳng nhưng có thể cấu hình để có xác suất bị trượt sang hai bên.
-- **Value Iteration & Policy Iteration**: Trực quan hóa từng bước hội tụ (sweep) của thuật toán bằng hiệu ứng Animation thời gian thực.
-- **Tính toán Q-Value $Q(s,a)$**: Xem chi tiết giá trị Action-Value cho từng hành động tại mỗi trạng thái bằng cách hover chuột lên Grid.
-- **Đánh giá Policy (Policy Evaluation)**: Vẽ tay một Policy bất kỳ và giải phương trình Bellman Expectation để tìm Value function $V_\pi(s)$.
+- **Dynamic Programming (Model-Based)**: 
+  - **Value Iteration & Policy Iteration**: Trực quan hóa từng bước hội tụ (sweep) bằng hiệu ứng Animation thời gian thực.
+  - **Đánh giá Policy (Policy Evaluation)**: Vẽ tay một Policy bất kỳ và giải phương trình Bellman Expectation để tìm Value function $V_\pi(s)$.
+- **Temporal-Difference Learning (Model-Free)**: Mô phỏng quá trình Agent tự học thông qua tương tác trực tiếp với môi trường (Trial and Error). Hỗ trợ đầy đủ các thuật toán cốt lõi của Chapter 6:
+  - **Q-Learning** (Off-policy TD Control)
+  - **SARSA** (On-policy TD Control)
+  - **Expected SARSA**
+  - **Double Q-Learning** (Khắc phục Maximization Bias)
+- **Tính toán Q-Value $Q(s,a)$**: Xem chi tiết giá trị Action-Value cho từng hành động tại mỗi trạng thái bằng cách hover chuột lên Grid hoặc mở bảng **Q-Table Matrix** (Live update trong quá trình TD Learning).
 - **Mô phỏng Agent & Discounted Return ($G_t$)**: Thả Agent vào lưới và xem Agent di chuyển thực tế theo Policy, đồng thời hệ thống tự động tính toán tổng phần thưởng chiết khấu $G_t$.
 
 ## Công nghệ sử dụng

@@ -962,3 +962,89 @@ input[type="text"]:focus {
     font-weight: 800;
 }
 
+/* Modal Q-Table */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(10, 14, 26, 0.8);
+    backdrop-filter: blur(8px);
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-content {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    width: 80%;
+    max-width: 800px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+}
+
+.modal-header {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.modal-header h2 {
+    font-size: 1.1rem;
+    color: var(--accent-bright);
+}
+
+.btn-close {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.5rem;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+.btn-close:hover {
+    color: var(--red);
+}
+
+.modal-body {
+    padding: 1.5rem;
+    overflow-y: auto;
+}
+
+.q-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.q-table th, .q-table td {
+    padding: 0.8rem;
+    border: 1px solid var(--border-color);
+    text-align: right;
+}
+
+.q-table th {
+    background: rgba(15, 23, 42, 0.6);
+    color: var(--text-primary);
+    text-align: center;
+}
+
+.q-table td.best-q {
+    color: var(--green);
+    font-weight: bold;
+    background: rgba(52, 211, 153, 0.05);
+}
+.q-table td.state-col {
+    text-align: center;
+    color: var(--accent-bright);
+    font-weight: bold;
+    background: rgba(99, 102, 241, 0.05);
+}
+
