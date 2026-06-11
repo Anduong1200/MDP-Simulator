@@ -100,16 +100,24 @@
                     </div>
                     <div class="input-group" style="margin-top: 10px;">
                         <label class="checkbox-label" style="display:flex; align-items:center; gap:8px; cursor:pointer; color:var(--text-primary); text-transform:none;">
-                            <input type="checkbox" id="isStochastic" style="width:16px; height:16px;" onchange="document.getElementById('stochFormula').style.display = this.checked ? 'block' : 'none'">
-                            <span>Môi trường Stochastic (20% trượt)</span>
+                            <input type="checkbox" id="isStochastic" style="width:16px; height:16px;" onchange="toggleStochasticParams()">
+                            <span>Môi trường Stochastic</span>
                         </label>
-                        <p style="font-size:0.7rem; color:var(--text-muted); margin-top:4px;">Nếu bật: Đi thẳng 80%, trượt sang 2 bên mỗi bên 10%.</p>
-                        <div id="stochFormula" style="display:none; font-size:0.75rem; color:var(--accent-bright); background:rgba(15,23,42,0.6); padding:8px; border-radius:4px; margin-top:4px;">
-                            \( p(s'|s,a) = \begin{cases} 
-                            0.8 & \text{hướng } a \\ 
-                            0.1 & \text{vuông góc 1} \\ 
-                            0.1 & \text{vuông góc 2} 
-                            \end{cases} \)
+                        <div id="stochParams" style="display:none; margin-top:6px; padding-left:24px;">
+                            <div class="input-row" style="margin-bottom:0;">
+                                <div class="input-group">
+                                    <label for="slipProb" style="text-transform:none; font-size:0.7rem;">Tỉ lệ trượt (Slip %)</label>
+                                    <input type="number" id="slipProb" value="0.2" min="0" max="1" step="0.05" onchange="updateStochFormula()">
+                                </div>
+                            </div>
+                            <p style="font-size:0.7rem; color:var(--text-muted); margin-top:4px;">Ví dụ 0.2: Đi thẳng 80%, trượt sang hai bên mỗi bên 10%.</p>
+                            <div id="stochFormula" style="font-size:0.75rem; color:var(--accent-bright); background:rgba(15,23,42,0.6); padding:8px; border-radius:4px; margin-top:4px;">
+                                \( p(s'|s,a) = \begin{cases} 
+                                0.8 & \text{hướng } a \\ 
+                                0.1 & \text{vuông góc 1} \\ 
+                                0.1 & \text{vuông góc 2} 
+                                \end{cases} \)
+                            </div>
                         </div>
                     </div>
                 </section>

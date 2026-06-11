@@ -21,6 +21,7 @@ let currentPolicy = [];  // 2D: action string
 let displayMode = 'both';
 let isRunning = false;
 let isStochastic = false;
+let slipProb = 0.2;
 let logLines = [];       // Lưu log toàn cục để render dần
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -300,6 +301,34 @@ document.addEventListener('mousemove', (e) => {
     }
 });
 
+// ── Environment Settings ──
+function toggleStochasticParams() {
+    const isStoch = document.getElementById('isStochastic').checked;
+    document.getElementById('stochParams').style.display = isStoch ? 'block' : 'none';
+    if (isStoch) updateStochFormula();
+}
+
+function updateStochFormula() {
+    slipProb = parseFloat(document.getElementById('slipProb').value);
+    if (isNaN(slipProb)) slipProb = 0.2;
+    if (slipProb < 0) slipProb = 0;
+    if (slipProb > 1) slipProb = 1;
+    
+    const straight = (1 - slipProb).toFixed(2);
+    const side = (slipProb / 2).toFixed(2);
+    const formulaDiv = document.getElementById('stochFormula');
+    
+    formulaDiv.innerHTML = `\\( p(s'|s,a) = \\begin{cases} 
+                            ${straight} & \\text{hướng } a \\\\ 
+                            ${side} & \\text{vuông góc 1} \\\\ 
+                            ${side} & \\text{vuông góc 2} 
+                            \\end{cases} \\)`;
+                            
+    if (window.MathJax) {
+        MathJax.typesetPromise([formulaDiv]);
+    }
+}
+
 // ── Algorithm Selection ──
 function selectAlgo(algo) {
     selectedAlgo = algo;
@@ -372,7 +401,7 @@ function getNextStateProbabilities(r, c, action) {
         return [{nr, nc, prob: 1.0}];
     }
     
-    // Stochastic: 80% intended, 10% left, 10% right
+    // Stochastic
     let leftAction, rightAction;
     if (action === 'U') { leftAction = 'L'; rightAction = 'R'; }
     else if (action === 'D') { leftAction = 'R'; rightAction = 'L'; }
@@ -382,10 +411,13 @@ function getNextStateProbabilities(r, c, action) {
     const [ldr, ldc] = ACTIONS[leftAction];
     const [rdr, rdc] = ACTIONS[rightAction];
     
+    const pStraight = 1 - slipProb;
+    const pSide = slipProb / 2;
+
     const outcomes = [
-        {dr: dr, dc: dc, p: 0.8},
-        {dr: ldr, dc: ldc, p: 0.1},
-        {dr: rdr, dc: rdc, p: 0.1}
+        {dr: dr, dc: dc, p: pStraight},
+        {dr: ldr, dc: ldc, p: pSide},
+        {dr: rdr, dc: rdc, p: pSide}
     ];
     
     const map = {};
