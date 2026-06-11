@@ -21,15 +21,25 @@ Một phần mềm mô phỏng trực quan các thuật toán cốt lõi của *
 - **Planning & Learning (Dyna Architecture)**: Kết hợp hoàn hảo giữa Model-Free (Học thực tế) và Model-Based (Tưởng tượng).
   - **Dyna-Q**: Tại mỗi bước đi thực tế, thực hiện nội suy thêm $n$ bước "tưởng tượng" (Planning Steps) từ các trải nghiệm trong quá khứ để tăng tốc độ hội tụ.
   - **Prioritized Sweeping**: Phiên bản tối ưu của Dyna-Q. Duy trì một Hàng đợi ưu tiên (Priority Queue) để chỉ quét (sweep) những trạng thái có độ chênh lệch Q-Value cao nhất, giúp lan truyền phần thưởng về đích cực kì nhanh.
-- **Temporal-Difference Learning (Step-by-step Model-Free)**: Mô phỏng quá trình Agent tự học thông qua tương tác trực tiếp với môi trường (Trial and Error). Hỗ trợ đầy đủ các thuật toán cốt lõi của Chapter 6:
+- **Temporal-Difference Learning (Step-by-step Model-Free)**: Mô phỏng quá trình Agent tự học thông qua tương tác trực tiếp với môi trường (Trial and Error). Hỗ trợ đầy đủ các thuật toán cốt lưỡng của Chapter 6:
   - **Q-Learning** (Off-policy TD Control)
   - **SARSA** (On-policy TD Control)
   - **Expected SARSA**
   - **Double Q-Learning**: Giảm thiểu Maximization Bias bằng cách dùng 2 bảng Q riêng biệt.
 
-## Phần II: Approximate Solution Methods
-- **On-policy Prediction với Function Approximation**: Thay vì lưu trữ mảng ma trận khổng lồ, thuật toán học bằng cách điều chỉnh các **Trọng số (Weights)** của hàm xấp xỉ $\hat{v}(s, w)$. Thể hiện mạnh mẽ sức mạnh của **Generalization** (Khái quát hóa).
-  - **Semi-gradient TD(0)**: Cập nhật trọng số thông qua vi phân bán phần (Semi-gradient).
+## Part II: Approximate Solution Methods
+
+Từ môi trường rời rạc nhỏ hẹp, Agent bước vào thế giới thực nơi không thể lưu trữ toàn bộ giá trị trong Q-Table. Các thuật toán Approximate Method thay thế Table bằng **Function Approximation** (thông qua Weights Vector $w$).
+
+- [x] **Chapter 9: On-policy Prediction with Approximation**
+  - Semi-gradient TD(0) Prediction.
+  - Hỗ trợ các đặc trưng (Features): Coordinate-based (Cơ bản) và Tile Coding (Lưới xếp chồng).
+- [x] **Chapter 10: On-policy Control with Approximation**
+  - Episodic Semi-gradient SARSA.
+  - Tích hợp biểu đồ thống kê (Learning Curve) để quan sát sự hội tụ của Reward (Tổng phần thưởng mỗi Episode). Giúp theo dõi quá trình học theo thời gian thực.
+- [ ] **Chapter 11: Off-policy Methods with Approximation** *(Sắp ra mắt)*
+  - Khảo sát sự sụp đổ của "The Deadly Triad".
+  - Thuật toán Gradient-TD (TDC/GTD2).
   - **Tính năng trích xuất đặc trưng (Feature Construction)**:
     - **Tọa độ tuyến tính**: Môi trường học từ $x, y$.
     - **Tile Coding**: Phương pháp kinh điển của RL. Sử dụng các lưới thưa (tiles) xếp chồng lên nhau để mô phỏng sự tương đồng về không gian. Tốc độ lan truyền kiến thức cực nhanh!

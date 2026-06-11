@@ -10,6 +10,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="index.css">
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <div class="app">
@@ -162,7 +163,11 @@
                         </div>
                         <div class="toggle-content" id="part2">
                             <div class="algo-selector" style="flex-wrap:wrap; display: flex; gap: 4px;">
+                                <div class="subsection-title" style="flex-basis: 100%; font-size: 0.75rem; text-align: center; color: #ef4444; margin-bottom: 2px;">Prediction</div>
                                 <button class="btn btn-algo" id="btnSemiGradTD" onclick="selectAlgo('semi_grad_td')" style="flex-basis: 100%; background: rgba(239, 68, 68, 0.1); border-color: #ef4444;">Semi-gradient TD(0)</button>
+                                
+                                <div class="subsection-title" style="flex-basis: 100%; font-size: 0.75rem; text-align: center; color: #ef4444; margin-bottom: 2px; margin-top: 4px;">Control</div>
+                                <button class="btn btn-algo" id="btnSemiGradSarsa" onclick="selectAlgo('semi_grad_sarsa')" style="flex-basis: 100%; background: rgba(239, 68, 68, 0.1); border-color: #ef4444;">Semi-gradient SARSA</button>
                             </div>
                         </div>
 
@@ -352,16 +357,21 @@
             </section>
 
             <!-- Right Panel: Log -->
-            <aside class="panel panel-right" id="logPanel" style="display:none;">
-                <section class="card log-card">
+            <aside class="panel panel-right" id="logPanel" style="display:none; width: 300px;">
+                <section class="card log-card" style="height: 100%; display: flex; flex-direction: column;">
                     <h2 class="card-title">
-                        <span class="card-icon">📋</span>
-                        Execution Log
+                        <span class="card-icon">📈</span>
+                        Analytics & Logs
                     </h2>
-                    <div class="log-controls">
-                        <button class="btn btn-sm" onclick="clearLog()">Clear</button>
+                    
+                    <div style="flex-shrink: 0; background: rgba(0,0,0,0.2); border-radius: 6px; padding: 4px; margin-bottom: 10px; height: 180px;">
+                        <canvas id="learningCurveChart"></canvas>
                     </div>
-                    <div class="log-content" id="logContent"></div>
+
+                    <div class="log-controls">
+                        <button class="btn btn-sm" onclick="clearLog()">Clear Log</button>
+                    </div>
+                    <div class="log-content" id="logContent" style="flex: 1; overflow-y: auto;"></div>
                 </section>
             </aside>
         </main>

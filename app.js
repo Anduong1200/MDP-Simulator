@@ -34,7 +34,7 @@ let simG = 0;
 let simGammaPower = 1;
 let simStepCount = 0;
 
-// ── UI UI Navigation & Toggle ──
+// ── UI Navigation & Toggle ──
 function switchSidebarTab(tabName) {
     document.getElementById('tabBtnEnv').classList.toggle('active', tabName === 'env');
     document.getElementById('tabBtnAlgo').classList.toggle('active', tabName === 'algo');
@@ -48,6 +48,64 @@ function toggleSection(sectionId) {
     const header = content.previousElementSibling;
     content.classList.toggle('active');
     header.classList.toggle('open');
+}
+
+// ── Chart Logic ──
+let learningChart = null;
+
+function initChart() {
+    const ctx = document.getElementById('learningCurveChart').getContext('2d');
+    if (learningChart) {
+        learningChart.destroy();
+    }
+    learningChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Sum of Rewards',
+                data: [],
+                borderColor: '#a855f7',
+                backgroundColor: 'rgba(168, 85, 247, 0.1)',
+                borderWidth: 1.5,
+                pointRadius: 0,
+                fill: true,
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                x: {
+                    title: { display: true, text: 'Episode', color: 'rgba(255,255,255,0.5)', font: {size: 10} },
+                    ticks: { color: 'rgba(255,255,255,0.5)' },
+                    grid: { color: 'rgba(255,255,255,0.1)' }
+                },
+                y: {
+                    title: { display: true, text: 'Return', color: 'rgba(255,255,255,0.5)', font: {size: 10} },
+                    ticks: { color: 'rgba(255,255,255,0.5)' },
+                    grid: { color: 'rgba(255,255,255,0.1)' }
+                }
+            }
+        }
+    });
+}
+
+function updateChart(episode, reward) {
+    if (!learningChart) return;
+    learningChart.data.labels.push(episode);
+    learningChart.data.datasets[0].data.push(reward);
+    if (episode % Math.ceil(learningChart.data.labels.length / 50) === 0 || episode === 1) {
+        learningChart.update();
+    }
+}
+function finalizeChart() {
+    if (learningChart) learningChart.update();
 }
 
 // ── Initialization ──
@@ -377,18 +435,21 @@ function selectAlgo(algo) {
     document.getElementById('btnDynaQ').classList.toggle('active', algo === 'dynaq');
     document.getElementById('btnPrioritizedSweeping').classList.toggle('active', algo === 'prioritized_sweeping');
 
-    document.getElementById('btnSemiGradTD').classList.toggle('active', algo === 'semi_grad_td');
+    document.getElementById('btnSemiGradSarsa').classList.toggle('active', algo === 'semi_grad_sarsa');
 
     const isTD = ['ql', 'sarsa', 'esarsa', 'dql'].includes(algo);
     const isMC = ['mc_on', 'mc_off'].includes(algo);
     const isNStep = ['nstep_sarsa', 'nstep_tree'].includes(algo);
     const isDyna = ['dynaq', 'prioritized_sweeping'].includes(algo);
-    const isApprox = ['semi_grad_td'].includes(algo);
+    const isApprox = ['semi_grad_td', 'semi_grad_sarsa'].includes(algo);
+    const isApproxPred = algo === 'semi_grad_td';
+    const isApproxCtrl = algo === 'semi_grad_sarsa';
     const isPIPE = ['pi', 'pe'].includes(algo);
     
     document.getElementById('piInitSection').style.display = isPIPE ? '' : 'none';
     document.getElementById('mfParams').style.display = (isTD || isMC || isNStep || isDyna || isApprox) ? '' : 'none';
     document.getElementById('alphaGroup').style.display = (isTD || isNStep || isDyna || isApprox) ? '' : 'none';
+    document.getElementById('epsilon').parentElement.style.display = (isTD || isMC || isNStep || isDyna || isApproxCtrl) ? '' : 'none';
     document.getElementById('nStepGroup').style.display = isNStep ? '' : 'none';
     document.getElementById('dynaGroup').style.display = isDyna ? '' : 'none';
     document.getElementById('featureGroup').style.display = isApprox ? '' : 'none';
@@ -826,6 +887,7 @@ async function runMonteCarloControl(algo, epsilon, episodes, gamma, stepReward) 
             }
 
             const reward = getReward(currR, currC, action, nextR, nextC, stepReward);
+            epReward += reward;
             
             episode.push({ r: currR, c: currC, action, reward });
             currR = nextR;
@@ -835,6 +897,8 @@ async function runMonteCarloControl(algo, epsilon, episodes, gamma, stepReward) 
             renderGrid();
             await sleep(0); // Rất nhanh
         }
+        
+        updateChart(ep, epReward);
 
         // 2. Backward Update (G_t)
         if (isTerminal(currR, currC)) {
@@ -914,6 +978,7 @@ async function runMonteCarloControl(algo, epsilon, episodes, gamma, stepReward) 
         }
     }
     
+    finalizeChart();
     agentPos = null;
     updateAgentPosition();
     return { V, policy };
@@ -929,6 +994,7 @@ async function runTDControl(algo, alpha, epsilon, episodes, gamma, stepReward) {
     const algoNames = { ql: 'Q-Learning', sarsa: 'SARSA', esarsa: 'Expected SARSA', dql: 'Double Q-Learning' };
     logLines = [];
     logLines.push({ type: 'header', text: `═══ ${algoNames[algo]} ═══` });
+    initChart();
     renderLog();
 
     // Reset Q-Matrix
@@ -962,6 +1028,7 @@ async function runTDControl(algo, alpha, epsilon, episodes, gamma, stepReward) {
         let r = startCell.r;
         let c = startCell.c;
         let steps = 0;
+        let epReward = 0;
         
         agentPos = { r, c };
         updateAgentPosition();
@@ -972,7 +1039,6 @@ async function runTDControl(algo, alpha, epsilon, episodes, gamma, stepReward) {
             steps++;
             
             if (algo === 'ql' || algo === 'dql') {
-                // For DQL, we use combined qMatrix for exploration
                 action = getEpsilonGreedyAction(r, c, qMatrix);
             }
 
@@ -987,6 +1053,7 @@ async function runTDControl(algo, alpha, epsilon, episodes, gamma, stepReward) {
             }
 
             const reward = getReward(r, c, action, nextR, nextC, stepReward);
+            epReward += reward;
             
             let nextAction;
             if (algo === 'sarsa') {
@@ -995,7 +1062,6 @@ async function runTDControl(algo, alpha, epsilon, episodes, gamma, stepReward) {
 
             if (algo === 'dql') {
                 if (Math.random() < 0.5) {
-                    // Update Q1
                     let maxA = 'U', maxQ = -Infinity;
                     if (!isTerminal(nextR, nextC)) {
                         for (const a of ACTION_KEYS) {
@@ -1005,7 +1071,6 @@ async function runTDControl(algo, alpha, epsilon, episodes, gamma, stepReward) {
                     const targetQ = isTerminal(nextR, nextC) ? 0 : qMatrix2[nextR][nextC][maxA];
                     qMatrix1[r][c][action] += alpha * (reward + gamma * targetQ - qMatrix1[r][c][action]);
                 } else {
-                    // Update Q2
                     let maxA = 'U', maxQ = -Infinity;
                     if (!isTerminal(nextR, nextC)) {
                         for (const a of ACTION_KEYS) {
@@ -1044,7 +1109,6 @@ async function runTDControl(algo, alpha, epsilon, episodes, gamma, stepReward) {
                 qMatrix[r][c][action] += alpha * (reward + gamma * target - qMatrix[r][c][action]);
             }
 
-            // Update V and Policy for display
             let bestA = 'U', bestQ = -Infinity;
             for (const a of ACTION_KEYS) {
                 if (qMatrix[r][c][a] > bestQ) { bestQ = qMatrix[r][c][a]; bestA = a; }
@@ -1060,10 +1124,10 @@ async function runTDControl(algo, alpha, epsilon, episodes, gamma, stepReward) {
             currentV = V;
             currentPolicy = policy;
             renderGrid();
-            
-            await sleep(1); // Render speed
+            await sleep(1);
         }
         
+        updateChart(ep, epReward);
         if (ep % Math.ceil(episodes/10) === 0 || ep === episodes) {
             logLines.push({ type: 'entry', text: `Episode ${ep}/${episodes} completed.` });
             renderLog();
@@ -1074,6 +1138,7 @@ async function runTDControl(algo, alpha, epsilon, episodes, gamma, stepReward) {
         }
     }
     
+    finalizeChart();
     agentPos = null;
     updateAgentPosition();
     return { V, policy };
@@ -1089,6 +1154,7 @@ async function runNStepControl(algo, nStep, alpha, epsilon, episodes, gamma, ste
     const algoNames = { nstep_sarsa: `${nStep}-step SARSA`, nstep_tree: `${nStep}-step Tree Backup` };
     logLines = [];
     logLines.push({ type: 'header', text: `═══ ${algoNames[algo]} ═══` });
+    initChart();
     renderLog();
 
     for (let r = 0; r < gridRows; r++) {
@@ -1130,6 +1196,7 @@ async function runNStepControl(algo, nStep, alpha, epsilon, episodes, gamma, ste
     for (let ep = 1; ep <= episodes; ep++) {
         let currR = startCell.r;
         let currC = startCell.c;
+        let epReward = 0;
         
         let states = [{r: currR, c: currC}];
         let actions = [];
@@ -1156,6 +1223,7 @@ async function runNStepControl(algo, nStep, alpha, epsilon, episodes, gamma, ste
                 }
 
                 const reward = getReward(states[t].r, states[t].c, actions[t], nextR, nextC, stepReward);
+                epReward += reward;
                 states.push({r: nextR, c: nextC});
                 rewards.push(reward);
 
@@ -1229,6 +1297,7 @@ async function runNStepControl(algo, nStep, alpha, epsilon, episodes, gamma, ste
             t++;
         }
         
+        updateChart(ep, epReward);
         if (ep % Math.ceil(episodes/10) === 0 || ep === episodes) {
             logLines.push({ type: 'entry', text: `Episode ${ep}/${episodes} completed.` });
             renderLog();
@@ -1239,6 +1308,7 @@ async function runNStepControl(algo, nStep, alpha, epsilon, episodes, gamma, ste
         }
     }
     
+    finalizeChart();
     agentPos = null;
     updateAgentPosition();
     return { V, policy };
@@ -1254,6 +1324,7 @@ async function runDynaControl(algo, planningSteps, alpha, epsilon, episodes, gam
     const algoNames = { dynaq: `Dyna-Q`, prioritized_sweeping: `Prioritized Sweeping` };
     logLines = [];
     logLines.push({ type: 'header', text: `═══ ${algoNames[algo]} ═══` });
+    initChart();
     renderLog();
 
     for (let r = 0; r < gridRows; r++) {
@@ -1265,9 +1336,8 @@ async function runDynaControl(algo, planningSteps, alpha, epsilon, episodes, gam
     let V = Array.from({ length: gridRows }, () => Array(gridCols).fill(0));
     let policy = Array.from({ length: gridRows }, () => Array(gridCols).fill('U'));
 
-    // Model map: r_c_a -> { r, c, reward }
     let model = {};
-    let PQueue = []; // For prioritized sweeping: array of {r, c, a, p}
+    let PQueue = []; 
 
     function getEpsilonGreedyAction(r, c, eps) {
         if (Math.random() < eps) {
@@ -1286,6 +1356,7 @@ async function runDynaControl(algo, planningSteps, alpha, epsilon, episodes, gam
         let currR = startCell.r;
         let currC = startCell.c;
         let steps = 0;
+        let epReward = 0;
         
         agentPos = { r: currR, c: currC };
         updateAgentPosition();
@@ -1294,7 +1365,6 @@ async function runDynaControl(algo, planningSteps, alpha, epsilon, episodes, gam
             steps++;
             let action = getEpsilonGreedyAction(currR, currC, epsilon);
 
-            // 1. Real Experience
             const probs = getNextStateProbabilities(currR, currC, action);
             const rand = Math.random();
             let cumulative = 0;
@@ -1304,8 +1374,8 @@ async function runDynaControl(algo, planningSteps, alpha, epsilon, episodes, gam
                 if (rand <= cumulative) { nextR = p.nr; nextC = p.nc; break; }
             }
             const reward = getReward(currR, currC, action, nextR, nextC, stepReward);
+            epReward += reward;
 
-            // 2. Direct RL Update
             let maxNextQ = -Infinity;
             for (const a of ACTION_KEYS) {
                 if (qMatrix[nextR][nextC][a] > maxNextQ) maxNextQ = qMatrix[nextR][nextC][a];
@@ -1323,10 +1393,8 @@ async function runDynaControl(algo, planningSteps, alpha, epsilon, episodes, gam
                 qMatrix[currR][currC][action] += alpha * (reward + gamma * maxNextQ - qMatrix[currR][currC][action]);
             }
 
-            // 3. Model Learning
             model[`${currR}_${currC}_${action}`] = { r: nextR, c: nextC, reward: reward };
 
-            // 4. Planning (Sweep)
             if (algo === 'dynaq') {
                 const modelKeys = Object.keys(model);
                 if (modelKeys.length > 0) {
@@ -1397,6 +1465,7 @@ async function runDynaControl(algo, planningSteps, alpha, epsilon, episodes, gam
             await sleep(0);
         }
         
+        updateChart(ep, epReward);
         if (ep % Math.ceil(episodes/10) === 0 || ep === episodes) {
             logLines.push({ type: 'entry', text: `Episode ${ep}/${episodes} completed.` });
             renderLog();
@@ -1407,6 +1476,7 @@ async function runDynaControl(algo, planningSteps, alpha, epsilon, episodes, gam
         }
     }
     
+    finalizeChart();
     agentPos = null;
     updateAgentPosition();
     return { V, policy };
@@ -1422,6 +1492,7 @@ async function runApproximatePrediction(algo, alpha, episodes, gamma, stepReward
     logLines = [];
     logLines.push({ type: 'header', text: `═══ Semi-gradient TD(0) ═══` });
     renderLog();
+    initChart();
 
     let numFeatures = 0;
     let getFeatures = null;
@@ -1481,6 +1552,7 @@ async function runApproximatePrediction(algo, alpha, episodes, gamma, stepReward
         let currR = startCell.r;
         let currC = startCell.c;
         let steps = 0;
+        let epReward = 0;
         
         agentPos = { r: currR, c: currC };
         updateAgentPosition();
@@ -1498,6 +1570,7 @@ async function runApproximatePrediction(algo, alpha, episodes, gamma, stepReward
                 if (rand <= cumulative) { nextR = p.nr; nextC = p.nc; break; }
             }
             const reward = getReward(currR, currC, action, nextR, nextC, stepReward);
+            epReward += reward;
 
             const v_curr = getV(currR, currC);
             const v_next = isTerminal(nextR, nextC) ? 0 : getV(nextR, nextC);
@@ -1519,22 +1592,183 @@ async function runApproximatePrediction(algo, alpha, episodes, gamma, stepReward
 
             currR = nextR;
             currC = nextC;
-            
-            currentV = V;
-            currentPolicy = policy; 
-            agentPos = { r: currR, c: currC };
-            renderGrid();
-            await sleep(0);
         }
+
+        updateChart(ep, epReward);
         
         if (ep % Math.ceil(episodes/10) === 0 || ep === episodes) {
+            for (let i = 0; i < gridRows; i++) {
+                for (let j = 0; j < gridCols; j++) {
+                    if (!isBlocked(i, j) && !isTerminal(i, j)) {
+                        V[i][j] = getV(i, j);
+                    }
+                }
+            }
+            currentV = V;
+            currentPolicy = policy; 
+            renderGrid();
+            await sleep(0);
+            
             logLines.push({ type: 'entry', text: `Episode ${ep}/${episodes} completed.` });
             renderLog();
         }
     }
     
+    finalizeChart();
     logLines.push({ type: 'entry', text: `Final Weights (w):` });
     logLines.push({ type: 'entry', text: `[${w.map(n => n.toFixed(2)).join(', ')}]` });
+    renderLog();
+    
+    agentPos = null;
+    updateAgentPosition();
+    return { V, policy };
+}
+
+// ── Semi-gradient SARSA ──
+async function runApproximateControl(algo, alpha, epsilon, episodes, gamma, stepReward, featureType) {
+    if (!startCell) {
+        alert('Cần đặt Start State!');
+        return { V: currentV, policy: currentPolicy };
+    }
+
+    logLines = [];
+    logLines.push({ type: 'header', text: `═══ Semi-gradient SARSA ═══` });
+    renderLog();
+    initChart();
+
+    let numStateFeatures = 0;
+    let getStateFeatures = null;
+
+    if (featureType === 'coord') {
+        numStateFeatures = 3;
+        getStateFeatures = (r, c) => [1, r / gridRows, c / gridCols];
+    } else if (featureType === 'tile') {
+        const numTilings = 3;
+        const tileSize = 3;
+        const width = Math.ceil(gridCols / tileSize) + 1;
+        const height = Math.ceil(gridRows / tileSize) + 1;
+        const tilesPerTiling = width * height;
+        numStateFeatures = numTilings * tilesPerTiling;
+
+        getStateFeatures = (r, c) => {
+            let x = Array(numStateFeatures).fill(0);
+            for (let t = 0; t < numTilings; t++) {
+                let tr = Math.floor((r + t) / tileSize);
+                let tc = Math.floor((c + t) / tileSize);
+                let index = t * tilesPerTiling + (tr * width + tc);
+                if (index < numStateFeatures) {
+                    x[index] = 1;
+                }
+            }
+            return x;
+        };
+    }
+
+    const numActions = 4;
+    const numFeatures = numStateFeatures * numActions;
+    let w = Array(numFeatures).fill(0);
+
+    function getFeaturesAction(r, c, a) {
+        let x = Array(numFeatures).fill(0);
+        let aIdx = ACTION_KEYS.indexOf(a);
+        let sx = getStateFeatures(r, c);
+        for(let i=0; i<numStateFeatures; i++){
+            x[aIdx * numStateFeatures + i] = sx[i];
+        }
+        return x;
+    }
+
+    function getQApprox(r, c, a) {
+        if (isBlocked(r, c) || isTerminal(r, c)) return 0;
+        let x = getFeaturesAction(r, c, a);
+        let val = 0;
+        for (let i = 0; i < numFeatures; i++) val += w[i] * x[i];
+        return val;
+    }
+
+    function getEpsilonGreedyActionApprox(r, c, eps) {
+        if (Math.random() < eps) {
+            return ACTION_KEYS[Math.floor(Math.random() * 4)];
+        }
+        let bestA = ACTION_KEYS[0];
+        let bestQ = -Infinity;
+        for (let a of ACTION_KEYS) {
+            let q = getQApprox(r, c, a);
+            if (q > bestQ) { bestQ = q; bestA = a; }
+            else if (q === bestQ && Math.random() < 0.5) bestA = a;
+        }
+        return bestA;
+    }
+
+    let V = Array.from({ length: gridRows }, () => Array(gridCols).fill(0));
+    let policy = Array.from({ length: gridRows }, () => Array(gridCols).fill('U'));
+
+    for (let ep = 1; ep <= episodes; ep++) {
+        let currR = startCell.r;
+        let currC = startCell.c;
+        let action = getEpsilonGreedyActionApprox(currR, currC, epsilon);
+        let steps = 0;
+        let epReward = 0;
+
+        while (!isTerminal(currR, currC) && steps < 1000) {
+            steps++;
+            const probs = getNextStateProbabilities(currR, currC, action);
+            const rand = Math.random();
+            let cumulative = 0;
+            let nextR = currR, nextC = currC;
+            for (const p of probs) {
+                cumulative += p.prob;
+                if (rand <= cumulative) { nextR = p.nr; nextC = p.nc; break; }
+            }
+            const reward = getReward(currR, currC, action, nextR, nextC, stepReward);
+            epReward += reward;
+
+            let nextAction = getEpsilonGreedyActionApprox(nextR, nextC, epsilon);
+            
+            let q_curr = getQApprox(currR, currC, action);
+            let q_next = isTerminal(nextR, nextC) ? 0 : getQApprox(nextR, nextC, nextAction);
+            
+            let x_curr = getFeaturesAction(currR, currC, action);
+            let error = reward + gamma * q_next - q_curr;
+
+            for (let i = 0; i < numFeatures; i++) {
+                w[i] += alpha * error * x_curr[i];
+            }
+
+            currR = nextR;
+            currC = nextC;
+            action = nextAction;
+        }
+        
+        updateChart(ep, epReward);
+
+        if (ep % Math.ceil(episodes/10) === 0 || ep === episodes) {
+            logLines.push({ type: 'entry', text: `Episode ${ep}/${episodes}: Reward = ${epReward.toFixed(2)}` });
+            renderLog();
+            
+            for(let i=0; i<gridRows; i++){
+                for(let j=0; j<gridCols; j++){
+                    if(!isBlocked(i,j) && !isTerminal(i,j)){
+                        let bestA = ACTION_KEYS[0];
+                        let bestQ = -Infinity;
+                        for(let a of ACTION_KEYS){
+                            let q = getQApprox(i, j, a);
+                            if(q > bestQ) { bestQ = q; bestA = a; }
+                        }
+                        V[i][j] = bestQ;
+                        policy[i][j] = bestA;
+                    }
+                }
+            }
+            currentV = V;
+            currentPolicy = policy;
+            renderGrid();
+            await sleep(0);
+        }
+    }
+    
+    finalizeChart();
+    logLines.push({ type: 'entry', text: `Final Weights computed (${numFeatures} dims)` });
     renderLog();
     
     agentPos = null;
@@ -1580,7 +1814,7 @@ async function runAlgorithm() {
     const isMC = ['mc_on', 'mc_off'].includes(selectedAlgo);
     const isNStep = ['nstep_sarsa', 'nstep_tree'].includes(selectedAlgo);
     const isDyna = ['dynaq', 'prioritized_sweeping'].includes(selectedAlgo);
-    const isApprox = ['semi_grad_td'].includes(selectedAlgo);
+    const isApprox = ['semi_grad_td', 'semi_grad_sarsa'].includes(selectedAlgo);
 
     let result;
     if (selectedAlgo === 'vi') {
@@ -1612,9 +1846,14 @@ async function runAlgorithm() {
         result = await runDynaControl(selectedAlgo, planningSteps, alpha, epsilon, episodes, gamma, isNaN(stepReward) ? -0.04 : stepReward);
     } else if (isApprox) {
         const alpha = parseFloat(document.getElementById('alpha').value) || 0.1;
+        const epsilon = parseFloat(document.getElementById('epsilon').value) || 0.2;
         const episodes = parseInt(document.getElementById('episodes').value) || 1000;
         const featureType = document.getElementById('featureType').value || 'tile';
-        result = await runApproximatePrediction(selectedAlgo, alpha, episodes, gamma, isNaN(stepReward) ? -0.04 : stepReward, featureType);
+        if (selectedAlgo === 'semi_grad_td') {
+            result = await runApproximatePrediction(selectedAlgo, alpha, episodes, gamma, isNaN(stepReward) ? -0.04 : stepReward, featureType);
+        } else {
+            result = await runApproximateControl(selectedAlgo, alpha, epsilon, episodes, gamma, isNaN(stepReward) ? -0.04 : stepReward, featureType);
+        }
     }
 
     currentV = result.V;
