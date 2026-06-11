@@ -6,7 +6,8 @@ Một phần mềm mô phỏng trực quan các thuật toán cốt lõi của *
 - **Mô phỏng Môi trường (Environment)**: Tạo Grid tùy chỉnh kích thước, đặt các vật cản (Blocked), Terminal States có thưởng/phạt, và vị trí xuất phát (Start).
 - **Môi trường Deterministic & Stochastic**: Cho phép điều chỉnh tỉ lệ trượt (Slip probability) của Agent. Mặc định Agent chọn đi thẳng nhưng có thể cấu hình để có xác suất bị trượt sang hai bên.
 - **Dynamic Programming (Model-Based)**: 
-  - **Value Iteration & Policy Iteration**: Trực quan hóa từng bước hội tụ (sweep) bằng hiệu ứng Animation thời gian thực.
+  - **Value Iteration & Policy Iteration**: Trực quan hóa từng bước hội tụ (sweep) bằng hiệu ứng Animation thời gian thực. Hỗ trợ đầy đủ **Asynchronous Dynamic Programming** (Gauss-Seidel in-place updates) giúp tăng tốc độ hội tụ.
+  - **Generalized Policy Iteration (GPI)**: Thay đổi số lượng vòng lặp Policy Evaluation ($k$) tối đa để mô phỏng sự dịch chuyển mượt mà giữa Value Iteration và Policy Iteration.
   - **Đánh giá Policy (Policy Evaluation)**: Vẽ tay một Policy bất kỳ và giải phương trình Bellman Expectation để tìm Value function $V_\pi(s)$.
 - **Temporal-Difference Learning (Model-Free)**: Mô phỏng quá trình Agent tự học thông qua tương tác trực tiếp với môi trường (Trial and Error). Hỗ trợ đầy đủ các thuật toán cốt lõi của Chapter 6:
   - **Q-Learning** (Off-policy TD Control)

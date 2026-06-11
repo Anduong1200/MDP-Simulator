@@ -477,18 +477,20 @@ function computeFullQMatrix(V, gamma, stepReward) {
 
 // ── Value Iteration ──
 async function runValueIteration(gamma, theta, stepReward) {
+    const isAsyncDP = document.getElementById('isAsyncDP').checked;
     const V = Array.from({ length: gridRows }, () => Array(gridCols).fill(0));
     let iterations = 0;
     let finalDelta = Infinity;
 
     logLines = [];
     logLines.push({ type: 'header', text: `═══ Value Iteration (${isStochastic?'Stochastic':'Deterministic'}) ═══` });
+    logLines.push({ type: 'entry', text: `Chế độ: ${isAsyncDP ? 'Asynchronous (In-place)' : 'Synchronous'}` });
     renderLog();
 
     while (iterations < 10000) {
         iterations++;
         let delta = 0;
-        const newV = V.map(row => [...row]);
+        const newV = isAsyncDP ? V : V.map(row => [...row]);
 
         for (let r = 0; r < gridRows; r++) {
             for (let c = 0; c < gridCols; c++) {
@@ -506,11 +508,14 @@ async function runValueIteration(gamma, theta, stepReward) {
                     }
                     bestVal = Math.max(bestVal, expectedVal);
                 }
+                const diff = Math.abs(bestVal - V[r][c]);
                 newV[r][c] = bestVal;
-                delta = Math.max(delta, Math.abs(newV[r][c] - V[r][c]));
+                delta = Math.max(delta, diff);
             }
         }
-        for (let r = 0; r < gridRows; r++) V[r] = newV[r];
+        if (!isAsyncDP) {
+            for (let r = 0; r < gridRows; r++) V[r] = newV[r];
+        }
         finalDelta = delta;
         
         // Cập nhật UI ngay lập tức
@@ -575,12 +580,13 @@ function getInitialPolicy() {
     return policy;
 }
 
-async function evaluatePolicyFixed(policy, V, gamma, theta, stepReward) {
+async function evaluatePolicyFixed(policy, V, gamma, theta, stepReward, maxSweeps = 0) {
     let evalSweeps = 0;
+    const isAsyncDP = document.getElementById('isAsyncDP').checked;
     while (true) {
         evalSweeps++;
         let delta = 0;
-        const newV = V.map(row => [...row]);
+        const newV = isAsyncDP ? V : V.map(row => [...row]);
         for (let r = 0; r < gridRows; r++) {
             for (let c = 0; c < gridCols; c++) {
                 if (isBlocked(r, c) || isTerminal(r, c)) { newV[r][c] = 0; continue; }
@@ -593,24 +599,31 @@ async function evaluatePolicyFixed(policy, V, gamma, theta, stepReward) {
                     const reward = getReward(r, c, a, p.nr, p.nc, stepReward);
                     expectedVal += p.prob * (reward + gamma * V[p.nr][p.nc]);
                 }
+                const diff = Math.abs(expectedVal - V[r][c]);
                 newV[r][c] = expectedVal;
-                delta = Math.max(delta, Math.abs(newV[r][c] - V[r][c]));
+                delta = Math.max(delta, diff);
             }
         }
-        for (let r = 0; r < gridRows; r++) V[r] = newV[r];
+        if (!isAsyncDP) {
+            for (let r = 0; r < gridRows; r++) V[r] = newV[r];
+        }
         
         currentV = V;
         renderGrid();
         await sleep(20); // Render nhanh cho PE sweeps
 
-        if (delta < theta) return evalSweeps;
+        if (maxSweeps > 0 && evalSweeps >= maxSweeps) return { sweeps: evalSweeps, converged: false };
+        if (delta < theta) return { sweeps: evalSweeps, converged: true };
     }
 }
 
 async function runPolicyIteration(gamma, theta, stepReward) {
+    const isAsyncDP = document.getElementById('isAsyncDP').checked;
+    const kSweeps = parseInt(document.getElementById('kSweeps').value) || 0;
     const policy = getInitialPolicy();
     logLines = [];
     logLines.push({ type: 'header', text: `═══ Policy Iteration (${isStochastic?'Stochastic':'Deterministic'}) ═══` });
+    logLines.push({ type: 'entry', text: `Cập nhật: ${isAsyncDP ? 'Asynchronous' : 'Synchronous'}, k = ${kSweeps > 0 ? kSweeps : '∞'}` });
     renderLog();
 
     let V = Array.from({ length: gridRows }, () => Array(gridCols).fill(0));
@@ -626,8 +639,8 @@ async function runPolicyIteration(gamma, theta, stepReward) {
         renderLog();
 
         // Policy Evaluation
-        const sweeps = await evaluatePolicyFixed(policy, V, gamma, theta, stepReward);
-        logLines.push({ type: 'sweep', text: `    Hội tụ sau ${sweeps} sweep` });
+        const res = await evaluatePolicyFixed(policy, V, gamma, theta, stepReward, kSweeps);
+        logLines.push({ type: 'sweep', text: `    Đánh giá dừng sau ${res.sweeps} sweep (${res.converged ? 'Hội tụ' : 'Đạt k'})` });
         renderLog();
         
         await sleep(100);
@@ -668,10 +681,13 @@ async function runPolicyIteration(gamma, theta, stepReward) {
 
         await sleep(200);
 
-        if (stable) {
+        if (stable && res.converged) {
             logLines.push({ type: 'stable', text: `✓ Policy STABLE! Kết thúc sau ${iterations} vòng.` });
             renderLog();
             break;
+        } else if (stable && !res.converged) {
+            logLines.push({ type: 'entry', text: `    Policy không đổi nhưng V(s) chưa hội tụ -> tiếp tục.` });
+            renderLog();
         }
     }
 
@@ -681,17 +697,20 @@ async function runPolicyIteration(gamma, theta, stepReward) {
 
 // ── Policy Evaluation Standalone ──
 async function runPolicyEvaluationStandalone(gamma, theta, stepReward) {
+    const isAsyncDP = document.getElementById('isAsyncDP').checked;
+    const kSweeps = parseInt(document.getElementById('kSweeps').value) || 0;
     const policy = getInitialPolicy();
     logLines = [];
     logLines.push({ type: 'header', text: `═══ Evaluate Current Policy (${isStochastic?'Stochastic':'Deterministic'}) ═══` });
     logLines.push({ type: 'entry', text: `Chỉ tính V(s) cho Policy hiện hành, KHÔNG tối ưu.` });
+    logLines.push({ type: 'entry', text: `Cập nhật: ${isAsyncDP ? 'Asynchronous' : 'Synchronous'}, Max Sweeps: ${kSweeps > 0 ? kSweeps : '∞'}` });
     renderLog();
 
     let V = Array.from({ length: gridRows }, () => Array(gridCols).fill(0));
     currentPolicy = policy;
-    const sweeps = await evaluatePolicyFixed(policy, V, gamma, theta, stepReward);
+    const res = await evaluatePolicyFixed(policy, V, gamma, theta, stepReward, kSweeps);
     
-    logLines.push({ type: 'sweep', text: `Hội tụ sau ${sweeps} sweep` });
+    logLines.push({ type: 'sweep', text: `Dừng sau ${res.sweeps} sweep (${res.converged ? 'Hội tụ' : 'Đạt k max'})` });
     computeFullQMatrix(V, gamma, stepReward);
     renderLog();
     return { V, policy };

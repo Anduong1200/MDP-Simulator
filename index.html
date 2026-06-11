@@ -120,6 +120,14 @@
                             </div>
                         </div>
                     </div>
+                    
+                    <div class="input-group" style="margin-top: 10px;">
+                        <label class="checkbox-label" style="display:flex; align-items:center; gap:8px; cursor:pointer; color:var(--text-primary); text-transform:none;">
+                            <input type="checkbox" id="isAsyncDP" style="width:16px; height:16px;">
+                            <span>In-place Updates (Asynchronous DP)</span>
+                        </label>
+                        <p style="font-size:0.7rem; color:var(--text-muted); margin-top:4px;">Nếu bật: Quét mảng V(s) bằng Gauss-Seidel (cập nhật đè trực tiếp), hội tụ nhanh hơn Jacobi.</p>
+                    </div>
                 </section>
 
                 <!-- Algorithm -->
@@ -140,6 +148,26 @@
                         <button class="btn btn-algo" id="btnSARSA" onclick="selectAlgo('sarsa')" style="flex:1; background: rgba(52, 211, 153, 0.1); border-color: var(--green);">SARSA</button>
                         <button class="btn btn-algo" id="btnESARSA" onclick="selectAlgo('esarsa')" style="flex:1; background: rgba(52, 211, 153, 0.1); border-color: var(--green);">E-SARSA</button>
                         <button class="btn btn-algo" id="btnDQL" onclick="selectAlgo('dql')" style="flex:1; background: rgba(52, 211, 153, 0.1); border-color: var(--green);">Double Q</button>
+                    </div>
+
+                    <!-- PI/PE Params -->
+                    <div id="piInitSection" style="display:none; margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.1);">
+                        <h3 class="subsection-title">GPI / Policy Params</h3>
+                        <div class="input-row" style="align-items: flex-start;">
+                            <div class="input-group">
+                                <label for="piInit">Init Policy</label>
+                                <select id="piInit" onchange="changeInitPolicy()">
+                                    <option value="uniform">Đồng nhất (Lên)</option>
+                                    <option value="random">Ngẫu nhiên</option>
+                                    <option value="manual">Tự vẽ tay</option>
+                                </select>
+                            </div>
+                            <div class="input-group">
+                                <label for="kSweeps">Max Eval Sweeps (k)</label>
+                                <input type="number" id="kSweeps" value="0" min="0" step="1">
+                                <p style="font-size:0.65rem; color:var(--text-muted); margin-top:2px;">(0 = Phải hội tụ hoàn toàn. >0 là GPI)</p>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- TD Learning Params -->
