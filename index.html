@@ -21,7 +21,7 @@
                     <span class="logo-icon">◈</span>
                     <h1>GridWorld <span class="accent">MDP</span></h1>
                 </div>
-                <p class="subtitle">Interactive Value Iteration & Policy Iteration Visualizer</p>
+                <p class="subtitle">Interactive GridWorld RL Visualizer | <a href="pavlov.html" style="color:var(--accent); font-weight:bold; text-decoration:none;">🐶 Bật chế độ: Pavlov's Dog (TD Model)</a></p>
             </div>
         </header>
 
@@ -51,14 +51,11 @@
                                 <input type="number" id="cols" value="4" min="2" max="10">
                             </div>
                         </div>
-                        <div style="display: flex; gap: 10px;">
-                        <button class="btn btn-primary" id="btnRun" onclick="runAlgorithm()" style="flex: 2; padding: 12px; font-weight: 600;">
-                            ▶ Run Algorithm
-                        </button>
-                        <button class="btn btn-danger" id="btnStop" onclick="stopAlgorithm()" style="flex: 1; padding: 12px; font-weight: 600; background: #dc2626; border-color: #ef4444;" disabled>
-                            ⏹ Stop
-                        </button>
-                    </div>
+                        <div style="margin-top: 15px;">
+                            <button class="btn btn-primary" onclick="createGrid()" style="width: 100%;">
+                                <span>⊞</span> Tạo Grid
+                            </button>
+                        </div>
 
                     <!-- Cell Editor -->
                     <section class="card" id="cellEditorCard" style="display:none;">
@@ -384,9 +381,12 @@
                             </div>
                         </div>
 
-                        <div class="run-controls" style="margin-top: 15px;">
-                            <button class="btn btn-run" id="btnRun" onclick="runAlgorithm()">
+                        <div class="run-controls" style="margin-top: 15px; display: flex; gap: 10px;">
+                            <button class="btn btn-run" id="btnRun" onclick="runAlgorithm()" style="flex: 2;">
                                 <span class="run-icon">▶</span> Chạy Thuật Toán
+                            </button>
+                            <button class="btn btn-danger" id="btnStop" onclick="stopAlgorithm()" style="flex: 1; padding: 12px; font-weight: 600; background: #dc2626; border-color: #ef4444; color: white;" disabled>
+                                ⏹ Stop
                             </button>
                         </div>
                     </section>

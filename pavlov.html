@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TD Model Simulator (Classical Conditioning)</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root { --bg: #0f172a; --panel: #1e293b; --text: #f8fafc; --accent: #3b82f6; }
+        body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header { text-align: center; margin-bottom: 20px; }
+        .panel { background: var(--panel); border-radius: 12px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); margin-bottom: 20px; }
+        .controls { display: flex; gap: 20px; flex-wrap: wrap; }
+        .control-group { flex: 1; min-width: 200px; background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); }
+        .control-group h3 { margin-top: 0; font-size: 1rem; color: #cbd5e1; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 5px; }
+        .input-row { display: flex; justify-content: space-between; margin-bottom: 10px; align-items: center; }
+        input { width: 60px; background: #0f172a; color: white; border: 1px solid #475569; border-radius: 4px; padding: 4px; text-align: center; }
+        .btn { background: var(--accent); color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1rem; width: 100%; transition: 0.2s; }
+        .btn:hover { opacity: 0.8; }
+        canvas { width: 100% !important; height: 400px !important; }
+        .back-link { color: #94a3b8; text-decoration: none; display: inline-block; margin-bottom: 10px; }
+        .back-link:hover { color: white; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="index.html" class="back-link">← Quay lại GridWorld MDP</a>
+        <div class="header">
+            <h1 style="margin:0; color: #f59e0b;">🐶 Pavlov's Dog: The TD Model Simulator</h1>
+            <p style="color: #94a3b8; margin-top: 5px;">Mô phỏng Classical Conditioning (Sutton & Barto - Chapter 14)</p>
+        </div>
+
+        <div class="panel controls">
+            <div class="control-group" style="border-color: #3b82f6;">
+                <h3 style="color: #3b82f6;">🔔 CS1 (Tiếng chuông)</h3>
+                <div class="input-row"><label>Bật (Bắt đầu):</label> <input type="number" id="cs1Start" value="10"></div>
+                <div class="input-row"><label>Thời lượng:</label> <input type="number" id="cs1Dur" value="5"></div>
+            </div>
+            <div class="control-group" style="border-color: #ec4899;">
+                <h3 style="color: #ec4899;">💡 CS2 (Ánh sáng đèn)</h3>
+                <div class="input-row"><label>Bật (Bắt đầu):</label> <input type="number" id="cs2Start" value="0"></div>
+                <div class="input-row"><label>Thời lượng:</label> <input type="number" id="cs2Dur" value="0"></div>
+                <small style="color:#64748b;">(Set > 0 để test hiện tượng Blocking)</small>
+            </div>
+            <div class="control-group" style="border-color: #10b981;">
+                <h3 style="color: #10b981;">🥩 US (Thức ăn/Reward)</h3>
+                <div class="input-row"><label>Xuất hiện ở:</label> <input type="number" id="usStart" value="25"></div>
+                <div class="input-row"><label>Giá trị Reward:</label> <input type="number" id="usVal" value="1"></div>
+            </div>
+            <div class="control-group" style="border-color: #f59e0b;">
+                <h3 style="color: #f59e0b;">⚙️ Hyperparameters</h3>
+                <div class="input-row"><label>Learning Rate (α):</label> <input type="number" id="alpha" value="0.1" step="0.05"></div>
+                <div class="input-row"><label>Discount (γ):</label> <input type="number" id="gamma" value="0.95" step="0.05"></div>
+                <div class="input-row"><label>Trials (Episodes):</label> <input type="number" id="trials" value="100"></div>
+            </div>
+        </div>
+
+        <button class="btn" onclick="runSimulation()">▶ Chạy Mô Phỏng TD(0)</button>
+
+        <div class="panel" style="margin-top: 20px;">
+            <canvas id="chart"></canvas>
+        </div>
+    </div>
+    <script src="pavlov.js"></script>
+</body>
+</html>
